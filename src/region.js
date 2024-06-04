@@ -213,15 +213,29 @@ const Features = {
 
     let short = what + " [" + type + "]"
 
+    //what's the save / skill 
+    const Checks = {
+      "blight" : "Examine,Survival,Mysticism,Arcana,Medicine,Endure/1,1,2,2,2,2",
+      "barrier" : "Brawn,Finesse,Survival,Craft/2,1,2,2",
+      "techtonic" : "Detect,Survival,Dodge/2,1,3",
+      "pitfall" : "Survival,Examine,Finesse,Dodge/1,1,2,3",
+      "ensnaring" : "Brawn,Survival,Endure/2,1,2",
+      "trap" : "Craft,Detect,Dodge,Finesse/2,2,2,1",
+      "meteorological" : "Survival,Endure/1,1",
+      "seasonal" : "Survival,Endure/1,1",
+      "impairing" : "Examine,Survival,Mysticism,Arcana/2,1,1,1"
+    }
+
     return {
       specifics: [type, what],
       short,
       text: "Hazard: " + short,
       siteType: "origin unknown",
       scale: RNG.weighted([0, 1, 2], [5, 4, 1]),
-      difficulty: Difficulty(RNG),
       essence: Essence(RNG),
-      isKnown: true
+      isKnown: true,
+      check : Checks[type],
+      blight : type == "blight"
     }
   },
   wilderness(RNG, region, opts={}) {
@@ -243,7 +257,6 @@ const Features = {
     let site = RNG.pickone(["Remnants", "Meeting Place", "Oddity"])
     let short = site
     let specifics = null
-    let symbol = null
     let isKnown = site == "Meeting Place" ? true : RNG.pickone([true, false])
     if (site == "Oddity") {
       let matl = RNG.pickone(["metallic", "organic", "fungal", "wood", "stone", "crystalline", "images", "particles"])
@@ -251,13 +264,18 @@ const Features = {
       let odd = RNG.pickone(["bright", "garish", "concentric", "web", "network", "noisy", "volcanic", "magnetic", "repellant", "smells", "eminates emotions", "tiered"])
       short += ` [${matl}, ${design}, ${odd}]`
       specifics = [site, matl, design, odd]
-      symbol = "oddity"
     } else {
       let what = RNG.pickone(RNG.pickone(Sites[site]).split("/"))
       short = what + ` [${short}]`
       specifics = [site, what]
-      symbol = "tower"
     }
+
+    //hazard to encounter ratio 
+    let _he = 2+RNG.sumDice("1d5")
+    let he = `hazard,encounter/${_he},${10-_he}`
+
+    //base encounter of the landmark, will mix in any encounters of the region
+    let encounter = RNG.hash()
 
     return {
       specifics: [site, specifics],
@@ -269,7 +287,11 @@ const Features = {
       essence: Essence(RNG),
       faction,
       symbol,
-      isKnown
+      isKnown,
+      he,
+      encounter,
+      blight : site == "Oddity",
+      symbol : site == "Oddity" ? "oddity" : "tower"
     }
   },
   resource(RNG, region) {
@@ -294,6 +316,13 @@ const Features = {
     const type = RNG.weighted(["caves/caverns", "homestead/settlement", "prison", "hive/nest", "mine/quarry/excavation", "tomb/crypt/necropolis", "lair/den/hideout", "stronghold/fortress", "shrine/temple/sanctuary", "archive/laboratory", "origin unknown"], [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 3])
     const short = RNG.pickone(type.split("/"))
 
+    //hazard to encounter ratio 
+    let _he = 2+RNG.sumDice("1d5")
+    let he = `hazard,encounter/${_he},${10-_he}`
+
+    //base encounter of the landmark, will mix in any encounters of the region
+    let encounter = RNG.hash()
+
     return {
       specifics: type,
       text: "Ruin: " + short,
@@ -303,7 +332,9 @@ const Features = {
       essence: Essence(RNG),
       short,
       symbol: "ruins",
-      isKnown: RNG.pickone([true, false])
+      isKnown: RNG.pickone([true, false]),
+      he,
+      encounter
     }
   },
   encounter(RNG, region) {

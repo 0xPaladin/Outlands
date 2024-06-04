@@ -281,7 +281,7 @@ class Party {
       //move party 
       this.state.loc[1] = id
       //trouble
-      this.region.trouble()
+      this.region.trouble(this)
     }
     if (act == "gather") {
       let q = Q.find(q=>q.state.where == id && q.quest.act == act)
@@ -356,6 +356,7 @@ const SKILLS = {
   "Logic" : ["Arcana","Craft","Examine","Lore","Medicine"],
   "Presence" : ["Influence","Performance"]
 }
+const SAVES = ["Dodge","Endure","Will"]
 const SKILLSBYCLASS = {
   Alchemist: [["Ranged","Craft"],3,["Arcana","Examine","Lore","Medicine","Survival"]],
   Barbarian: [["Melee","Brawn"],2,["Detect","Influence","Mysticism","Survival","Vibe"]],
@@ -476,16 +477,16 @@ class Character {
     let stats = this.stats 
     let _skills = this.state.skills
     return Object.fromEntries(Object.entries(SKILLS).map(([s,skills])=> {
-      return skills.map(skill => [skill,_skills.includes(skill) ? 2*stats[s] : stats[s]])
+      return skills.map(skill => [skill,_skills.includes(skill) ? stats[s] : Math.floor(stats[s]/2)])
     }).flat())
   }
 
   get saves () {
     let stats = this.stats 
     return {
-      "Dodge" : stats.Dexterity+stats.Awareness,
-      "Endure" : stats.Might*2,
-      "Will" : stats.Presence+stats.Logic
+      "Dodge" : Math.floor(stats.Dexterity/2+stats.Awareness/2),
+      "Endure" : stats.Might,
+      "Will" : Math.floor(stats.Presence/2+stats.Logic/2)
     }
   }
 
@@ -518,36 +519,6 @@ class Character {
     return this.state.health[0]
   }
 
-  set coin(d) {
-    return this.state.coin += d
-    //save 
-    this.app.save("characters", this.id)
-  }
-
-  get coin() {
-    return this.state.coin
-  }
-
-  get load() {
-    let {Bond, Command, Muscle} = this.actions
-    let items = this.inventory
-    let allies = this.allies
-
-    let _load = items.reduce((sum,item)=>sum + item.enc, 0)
-    let allyLoad = allies.reduce((sum,a)=>sum + a.load, 0)
-    let maxLoad = 8 + 2 * Muscle[0]
-    let maxAllies = 1 + Math.max(0, Bond[0], Command[0])
-
-    return {
-      items: [_load, allyLoad + maxLoad],
-      allies: [allies.length, maxAllies]
-    }
-  }
-
-  get mayAct() {
-    return this.state.action < this.app.game.time && this.isHired
-  }
-
   /*
     Location 
   */
@@ -560,88 +531,13 @@ class Character {
   }
 
   /*
-    Marktplace Actions / Buying 
-  */
-
-  mayBuy(what, cost) {
-    let coin = this.state.coin
-    let[c,max] = what == "item" ? this.load.items : this.load.allies
-
-    return c < max && coin > cost
-  }
-
-  marketBuy(item, rid) {
-    //reduce coin 
-    this.state.coin -= item.mPrice
-    //add 
-    let data = item.data.slice()
-    if (data[1] == "NPC") {
-      //hired for a month 
-      data[6] = this.app.game.time + 30
-    }
-    //add to known and inventory
-    if ('Power,Magical'.includes(data[1])) {
-      this.app.game.known.add(data[0])
-    }
-    this.state.inventory.push(data)
-    //reduce qty in region market by pushing to bought 
-    let bid = Hash([rid, data[1] == "NPC" ? item.id : item.text])
-    this.app.game.bought[bid] = this.app.game.bought[bid] ? this.app.game.bought[bid] + 1 : 1
-    //save and refresh 
-    this.app.save("characters", this.id)
-    this.app.notify(`${this.name} has bought ${item.text}`)
-  }
-
-  marketSell(item, val) {
-    //remove from inventory
-    let i = this.state.inventory.map(item=>item[0]).indexOf(item.id)
-    this.state.inventory.splice(i, 1)
-    //give coin
-    this.state.coin += val
-    //save and refresh 
-    this.app.save("characters", this.id)
-    this.app.notify(`Sold ${item.text} for ${val}g`)
-  }
-
-  /*
-    Cost, Hiring, Activate  
+   Activate  
   */
   activate() {
     this.app.game.toSave.add(this.id)
     this.app.game.state[this.id] = this.state
     this.app.activeState[this.id] = this
   }
-
-  get cost() {
-    return Cost[this.level - 1]
-  }
-
-  get isHired() {
-    return this.app.game.characters.has(this.id)
-  }
-
-  get mayHire() {
-    let {fame, characters} = this.app.game
-    let _fame = fame.slice()
-    //get characters at rank and reduce fame 
-    characters.forEach((atR,id)=>_fame[Math.floor(this.app.characters[id].level / 2)]--)
-    //determine fame rank for explorer  
-    let reqFameRank = Math.floor(this.level / 2)
-
-    //allowed to have more 0 level explorers 
-    return _fame[reqFameRank] > (reqFameRank == 0 ? -3 : 0) && !this.isHired
-  }
-
-  hire() {
-    let game = this.app.game
-    //hire 
-    this.state.hired = game.time
-    //remove from explorer roster 
-    game.explorers.delete(this.id)
-    //save and refresh 
-    this.app.save("characters", this.id)
-  }
-
   /*
     Party 
   */
@@ -654,48 +550,6 @@ class Character {
 
   get party() {
     return Object.values(this.app.activeState).find(p=>p.ids && p.ids.includes(this.id))
-  }
-
-  /*
-    Values for action / save display 
-  */
-
-  get saves() {
-    let _act = this.actions
-    return Object.fromEntries(Object.entries(ActionsBySave).map((([save,acts])=>{
-      let val = acts.reduce((sum,a)=>sum + (_act[a][0] > 0 ? 1 : 0), 0)
-      return [save, [val, DieRank[val]]]
-    }
-    )))
-  }
-
-  get actions() {
-    let lv = this.level
-    let _act = this._actions = {}
-    let RNG = new Chance(this.id)
-
-    //always 4 random action advances 
-    RNG.shuffle(AllActions).slice(0, 4).forEach(a=>_act[a] = _act[a] ? _act[a] + 1 : 1)
-
-    //write actions based upon level advances 
-    ClassAdvance[this._adv].slice(0, lv).forEach(adv=>{
-      adv.split(",").forEach(a=>{
-        a = a == "random" ? RNG.pickone(AllActions) : a
-        _act[a] = _act[a] ? _act[a] + 1 : 1
-      }
-      )
-    }
-    )
-
-    return Object.fromEntries(AllActions.map(a=>{
-      let val = (this._actions[a] || 0)
-      return [a, [val, DieRank[val]]]
-    }
-    ))
-  }
-
-  get actionsBySave() {
-    return Object.values(ActionsBySave).map((list,i)=>list.map(a=>[a, this.actions[a]]))
   }
 
   /*

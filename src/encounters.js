@@ -126,7 +126,7 @@ const MC = {}
 const airAnimals = ['pteranadon', 'condor', 'eagle/owl', 'hawk/falcon', 'crow/raven', 'heron/crane/stork', 'gull/waterbird', 'songbird/parrot', 'chicken/duck/goose', 'bee/hornet/wasp', 'locust/dragonfly/moth', 'gnat/mosquito/firefly']
 const earthAnimals = ['dinosaur/megafauna', 'elephant/mammoth', 'ox/rhinoceros', 'bear/ape/gorilla', 'deer/horse/camel', 'cat/lion/panther', 'dog/wolf/boar/pig', 'snake/lizard/armadillo', 'mouse/rat/weasel', 'ant/centipede/scorpion', 'snail/slug/worm', 'termite/tick/louse', 'alligator/crocodile', 'frog/toad']
 const waterAnimals = ['whale/narwhal', 'squid/octopus', 'dolphin/shark', 'turtle', 'shrimp/crab/lobster', 'fish', 'eel/snake', 'clam/oyster/snail', 'jelly/anemone', 'arthropod/barnacle']
-const oddities = ['many-heads/no-head', 'profuse sensory organs', 'many limbs/tentacles/feelers', 'shape changing', 'bright/garish/harsh', 'web/network', 'crystalline/glassy', 'gaseous/misty/illusory', 'volcanic/explosive', 'magnetic/repellant', 'multilevel/tiered', 'absurd/impossible']
+const oddities = ['many-heads/no-head', 'profuse sensory organs', 'many limbs/tentacles/feelers', 'shape changing', 'bright/garish/harsh', 'web/network', 'crystalline/glassy', 'gaseous/misty/illusory', 'volcanic/explosive', 'magnetic/repellant', 'ooze/fungal/plant-based']
 
 const IsAquatic = 'whale/narwhal/squid/octopus/dolphin/shark/turtle/shrimp/crab/lobster/fish/eel/clam/oyster/snail/jelly/anemone/arthropod/barnacle/Morkoth/Nereid/Marid/Water Genasi/Sahuagin/Sea Fey/Triton/Locathah/Merfolk'
 
@@ -135,10 +135,7 @@ const Rarity = {
   'Aberration': 'small,medium/large/huge/gargantuan',
   'Animal': 'small,medium/large/huge/gargantuan',
   'Automaton': 'small,medium/large/huge/gargantuan',
-  'Dragon': 'Kobold/Dragon-kin,Half-dragon,Wyrmling/Very Young,Young,Juvenile/Young Adult,Adult,Mature Adult,Old/Very Old,Wyrm,Great Wyrm',
-  'Magical Beast': 'Ankheg,Griffon,Hippogriff,Stirge/Bulette,Carrion Crawler,Owlbear,Shambling Mound,Wyvern/Basilisk,Chimera,Cockatrice,Displacer Beast,Dragonne,Hell Hound,Hydra,Manticore,Naga,Nightmare,Otyugh,Rust Monster,Umber Hulk/Behir,Catoblepas,Gorgon,Mimic,Pegasus,Peryton,Remorhaz,Roc,Purple Worm/',
-  'Ooze': 'tiny,small/medium,large/huge/gargantuan',
-  'Plant': '/Black Pudding,Gas Spore,Shrieker,Thornslinger,Yellow Musk Creeper,Shambling Mound/Brown Pudding,Choke Creaper,Hangman Tree,Mantrap,Phycomid,Violet Fungus//',
+  'Dragon': '/Wyrmling/Very Young,Young,Juvenile/Young Adult,Adult,Mature Adult,Old/Very Old,Wyrm,Great Wyrm',
   'Undead': '/Ghoul,Skeleton,Zombie/Shadow,Wight,Ghost,Mummy,Vampire,Wraith,Banshee/Revenant,Death Knight,Lich/',
   'Vermin': 'tiny,small/medium,large/huge/gargantuan',
   //Sub generators 
@@ -151,10 +148,7 @@ const Threat = {
   'Aberration': 'small,medium/large/huge/gargantuan',
   'Animal': 'small,medium/large/huge/gargantuan',
   'Automaton': 'small,medium/large/huge/gargantuan',
-  'Dragon': 'Kobold,Dragon-kin/Half-dragon,Wyrmling,Very Young,Young/Juvenile,Young Adult,Adult/Mature Adult,Old,Very Old/Wyrm,Great Wyrm',
-  'Magical Beast': 'Stirge/Bulette,Chimera,Carrion Crawler,Cockatrice,Displacer Beast,Shambling Mound,Griffon,Dragonne,Manticore,Naga,Rust Monster,Nightmare,Hell Hound,Hippogriff,Stirge,Wyvern,Mimic,Pegasus,Peryton/Ankheg,Bulette,Owlbear,Wyvern,Basilisk,Hydra,Otyugh,Umber Hulk,Behir,Catoblepas,Gorgon,Remorhaz/Roc,Purple Worm/',
-  'Ooze': 'tiny,small,medium/large/huge/gargantuan',
-  'Plant': '/Black Pudding,Gas Spore,Shrieker,Thornslinger,Yellow Musk Creeper,Shambling Mound/Brown Pudding,Choke Creaper,Hangman Tree,Mantrap,Phycomid,Violet Fungus//',
+  'Dragon': '/Wyrmling,Very Young,Young/Juvenile,Young Adult,Adult/Mature Adult,Old,Very Old/Wyrm,Great Wyrm',
   'Undead': '/Ghoul,Skeleton,Zombie/Shadow,Wight,Ghost,Mummy,Vampire,Wraith,Banshee/Revenant,Death Knight,Lich/',
   'Vermin': 'tiny,small/medium,large/huge/gargantuan',
   'Folk': 'Feathered,Scaled,Fanged,Hooved,Roda,Lago,Finned,Tentacled,Web,Formic,Opteri,Koleo,Shelled,Chirops,Selachii,Bato,Angui,Skoraps////',
@@ -177,7 +171,10 @@ const Split = (val,str)=>{
   }
 }
 
-const Essence = (RNG)=>RNG.pickone(Object.keys(Details.essence))
+const Essence = (RNG)=> {
+  let e = RNG.pickone(Object.keys(Details.essence))
+  return [e,RNG.pickone(Details.essence[e].split(","))]
+}
 
 const Generators = {
   size(RNG=chance, what) {
@@ -222,7 +219,7 @@ const Generators = {
       tags.push(size)
     }
 
-    let what = `${chimera.join("/")} [${size}, ${odd}, ${essence}]`
+    let what = `${chimera.join("/")} [${size}, ${odd}, ${essence[0]}]`
     
     return ["Aberration", what,tags]
   },
@@ -235,10 +232,7 @@ const Generators = {
     const aew = RNG.weighted(['a', 'e', 'w', 'c'], [3, 6, 2, 1])
 
     let what = (aew == 'c' ? Generators._chimera(RNG) : Generators._animal(RNG, aew))
-    let tags = aew == "w" || waterAnimals.reduce((isAquatic,a)=> isAquatic || a.includes(what),false) ? [what,"aquatic"] : [what]
-    if(size != "medium"){
-      tags.push(size)
-    }
+    let tags = aew == "w" || waterAnimals.reduce((isAquatic,a)=> isAquatic || a.includes(what),false) ? [size,what,"aquatic"] : [size,what]
     
     return ["Animal", what + " ["+size+"]",tags]
   },
@@ -246,13 +240,14 @@ const Generators = {
     //base determines size 
     let {base, rarity, max, delta} = o
     let size = o.size || RNG.pickone(base)
+    let e = Essence(RNG)
 
     //material 
     let matl = RNG.pickone(["Clockwork","Organic","Crystalline","Mechanical"])
     let shape = RNG.pickone(["Humanoid","Boxy","Geometric","Globular"])
-    let tags = size != "medium" ? [size] : []
+    let tags = size != "medium" ? [size,e] : [e]
 
-    let what = `${matl} ${shape} [${size}]`
+    let what = `${matl} ${shape} [${size}, ${e[1]}]`
     
     return ["Automaton", what,tags]
   },
@@ -267,22 +262,19 @@ const Generators = {
     let color = RNG.weighted(_color, [2, 3, 3, 3, 1])
     return ["Dragon",  [color,age.includes(what) ? "Dragon" : what].join(" "), [color,what,age.includes(what)]]
   },
-  "Magical Beast"(RNG=chance, o={}) {
-    let {base, rarity, max, delta} = o
-    return ["Magical Beast", RNG.pickone(base),[]]
-  },
-  Ooze(RNG=chance, o={}) {
-    //base determines size 
-    let {base, rarity, max, delta} = o
-    return ["Ooze", ["Ooze",Generators._animal(RNG),"["+RNG.pickone(base)+"]"].join(" "),[]]
-  },
-  Plant(RNG=chance, o={}) {
-    let {base, rarity, max, delta} = o
-    return ["Plant", RNG.pickone(base),[]]
-  },
   Undead(RNG=chance, o={}) {
     let {base, rarity, max, delta} = o
-    return ["Undead", RNG.pickone(base),[]]
+    let u = RNG.pickone(base)
+
+    //people, folk, beast 
+    let before = Encounter({
+      id : o.id,
+      what : RNG.weightedString("People,Folk,Beast/4,4,2")
+    })
+    let _tags = before.tags.slice()
+    let short = `${_tags[1]} ${u}${_tags[1]!='medium'?`[${_tags[1]}]`:''}`
+    
+    return ["Undead", short,_tags]
   },
   Vermin(RNG=chance, o={}) {
     //base determines size 
@@ -298,7 +290,7 @@ const Generators = {
     let e = RNG.pickone(base)
     let size = RNG.weightedString('small,medium,large/15,70,15')
     
-    let tags = size != "medium" ? [size,e] : [e]
+    let tags = [size,e]
     e=="Water" ? tags.push("aquatic") : null 
     
     let what = `${e}-folk`+(size!='medium'?` [${size}]`:``)
@@ -310,11 +302,11 @@ const Generators = {
     let aquatic = 'Finned,Tentacled,Shelled,Selachii,Bato,Angui'
     let {base, rarity, max, delta} = o
     
-    let animal = RNG.pickone(base)
+    let folk = RNG.pickone(base)
     let size = RNG.weightedString('small,medium,large/15,70,15')
-    let tags = size != "medium" ? [size] : []
+    let tags = [size,folk]
 
-    let what = animal+(noFolk.includes(animal)?"":"-folk")+(size!='medium'?` [${size}]`:``)
+    let what = folk+(noFolk.includes(folk)?"":"-folk")+(size!='medium'?` [${size}]`:``)
 
     //check for people 
     if(RNG.likely(10)){
@@ -322,7 +314,7 @@ const Generators = {
       what = `${e} ${what}`
       tags.push(e)
     }    
-    aquatic.includes(animal) || tags.includes("Water") ? tags.push("aquatic") : null
+    aquatic.includes(folk) || tags.includes("Water") ? tags.push("aquatic") : null
     
     return ["People",what,tags]
   }
@@ -335,7 +327,7 @@ const StringGenerate = {
     return [what, where[what]]
   },
   Monster(RNG, where) {
-    let what = RNG.weightedString('Aberration,Automaton,Dragon,Magical Beast,Ooze,Plant,Undead,Vermin/2,1,1,1,1,2,2,2',RNG)
+    let what = RNG.weightedString('Aberration,Automaton,Dragon,Undead/6,1,1,2',RNG)
     return [what, where[what]]
   },
 }
@@ -387,12 +379,11 @@ const Encounter = (o={})=>{
 
   //essence 
   let e = Essence(RNG)
-  let _essence = [e,RNG.pickone(Details.essence[e].split(","))]
 
   //format result
   //[id,"NPC",short,rank,prof,tags,timeEmployed,damage]
   return {
-    data : [id,"NPC",short,rank,prof,tags,_essence],
+    data : [id,"NPC",short,rank,prof,tags,e],
     get id () {return this.data[0]},
     get nameBase () {return Math.abs(parseInt(Hash(this.data),16)%43) },
     get base () {return this.tags[0]},
@@ -401,7 +392,6 @@ const Encounter = (o={})=>{
     get die () {return DieRank[this.rank]},
     get tags () {return this.data[5]},
     get essence () {return this.data[6]},
-    get outsider () {return this.base == "Outsider" ? this.tags[1] : null},
     get trade () { 
       if(this.data[4].length != 3) {
         return null 

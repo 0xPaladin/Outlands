@@ -1,7 +1,4 @@
-/*
-  Useful Random Functions 
-*/
-import {RandBetween, SumDice, Likely, chance} from "./random.js"
+const Difficulty = (RNG=chance)=>RNG.weighted([0, 1, 2, 3, 4], [30, 35, 23, 10, 2])
 
 /*
   Use Honeycomb for Hex tools 
@@ -69,13 +66,27 @@ class Area {
   }
 
   //calculate trouble 
-  trouble () {
-    let nd = this._safety ? 4 - this._safety : 2 
+  trouble (party,from) {
+    //use the safety of the area 
+    let s = this._safety ? 4 - this._safety : 2 
     //keep half  
-    let nt = _.fromN(nd,()=>chance.bool()).filter(b=> b)
+    let nt = _.fromN(s,()=>chance.bool()).filter(b=> b)
 
+    //pull a difficulty 
+    let D = from.difficulty || Difficulty()
+    
     let trouble = ["hazard","encounter"].map(what=> this.lookup(what)).flat()
-    let res = nt.map(_=> trouble.length == 0 || chance.bool() ? this.encounter({what:chance.pickone(["Beast","Monster"])}) : chance.pickone(trouble)) 
+    let res = nt.map(_=> {
+      let what = trouble.length == 0 || chance.bool() ? this.encounter({what:"Monster"}) : chance.pickone(trouble)
+      let check = chance.weightedString(what.check || 'Ranged,Melee/1,1')
+
+      let chars = party.characters.map(c=> {
+        let nd = c.skills[check] - D 
+        let roll = nd > 1 ? chance.dicePool(nd+"d6",[6]) : 
+        return [c.name]
+      })
+    }) 
+
     console.log(nt,res)
   }
   
