@@ -1,4 +1,3 @@
-import {Planes} from './setting.js';
 
 var DB = localforage.createInstance({
   name: "Areas"
@@ -199,7 +198,6 @@ const PerilousShores = (region)=>{
 */
 import {Encounter, Professions} from "./encounters.js"
 import*as Details from "./data.js"
-
 const Essence = (RNG)=>RNG.pickone(Object.keys(Details.essence))
 
 const Features = {
@@ -285,8 +283,7 @@ const Features = {
       scale: RNG.weighted([0, 1], [6, 4]),
       difficulty: Difficulty(RNG),
       essence: Essence(RNG),
-      faction,
-      symbol,
+      faction : null,
       isKnown,
       he,
       encounter,
@@ -404,9 +401,7 @@ import*as Quests from "./quests.js"
   Core Class for a Region 
   Generates from options 
 */
-import*as Names from "./names.js"
 import {Site, Area} from "./site.js"
-import {MarketUI} from "./marketplace.js"
 
 class Region extends Area {
   constructor(app, state={}) {
@@ -460,7 +455,7 @@ class Region extends Area {
 
     //add people for every settlement 
     let nS = this.lookup("settlement").length
-    _.fromN(nS, ()=>this.state.f.set(RNG.natural(), ["people", RNG.pickone(["People", "Folk"])]))
+    _.fromN(nS, ()=>this.state.f.set(RNG.natural(), ["people", "People"]))
 
     //set children again, after people - adds all features / people 
     this.children = [...this.state.f.entries()].map(([key,val])=>{
@@ -508,6 +503,9 @@ class Region extends Area {
 
   get plane() {
     return this.state.plane
+  }
+
+  get planeData () {
   }
 
   //parent handling of plane  
@@ -781,11 +779,11 @@ class Region extends Area {
 
     //pull encounter from parent plane - always Planar, Petitioner, Beast... 
     let {encounters={}} = this.parent
-    let base = encounters.base ? encounters.base : "People,Folk,Beast,Monster/20,25,30,35"
+    let base = encounters.base ? encounters.base : "People,Beast,Monster/45,30,35"
 
     //base inital result on safety 
     //all encounters build a list of types of creatures 
-    let what = o.what ? o.what : RNG.likely(30 + (this._safety * 10), RNG) ? RNG.weightedString("People,Folk/4,5") : RNG.weightedString(base)
+    let what = o.what ? o.what : RNG.likely(30 + (this._safety * 10), RNG) ? "People" : RNG.weightedString(base)
     //see if encounters provides a specific rarity string 
     let str = encounters[what]
 

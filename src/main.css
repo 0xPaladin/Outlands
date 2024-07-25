@@ -1,8 +1,15 @@
 body {
   margin: 0;
+  background-color: lightgray;
+}
+.body-img {
+  background-image : url("../img/background-maps.png");
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: auto;
 }
 
-h1, h2, h3 {
+h1, h2, h3, h4 {
   font-family: "MedievalSharp", sans-serif;
 }
 
@@ -131,26 +138,20 @@ use.faction {
 }
 
 /*
-.hex.swamp {
-  fill: olive;
-}
-.hex.desert {
-  fill: khaki;
-}
-.hex.plains {
-  fill: lightgreen;
-}
-.hex.forest {
-  fill: green;
-}
-.hex.hills {
-  fill: brown;
-}
-.hex.mountains {
-  fill: gray;
-}
+  magnify 
+
 
 */
+
+
+/*
+  Dropdowns 
+
+
+
+*/
+
+
 .dropdown {
   position: relative;
 }

@@ -1,8 +1,4 @@
 /*
-  Useful Random Functions 
-*/
-import {RandBetween,SumDice,chance} from "./random.js"
-/*
   Honeycomb - https://abbekeultjes.nl/honeycomb/
 */
 import "../lib/honeycomb-grid.min.js"

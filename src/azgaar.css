@@ -1,0 +1,65 @@
+.nofill {
+  fill:none;
+}
+.invisible {
+  display:none;
+}
+
+.rivers path {
+  stroke: #466eab;
+  stroke-width: 2px;
+  fill :#466eab;
+}
+
+.border {
+  fill: none;
+  stroke : black;
+  stroke-linejoin: round;
+}
+.border-state {
+  stroke-width: 4;
+  stroke-opacity : 0.6;
+  
+}
+.border-province {
+  stroke-width: 3;
+  stroke-opacity : 0.3;
+}
+
+.cell.selected {
+  stroke: white;
+  stroke-width: 9;
+}
+.selected {
+  stroke: white;
+  stroke-width: 7;
+}
+.state {
+  fill-opacity : 0.5;
+  stroke-width: 8;
+}
+.province {
+  fill: none;
+}
+
+.cell:hover {
+  stroke: white;
+  stroke-width: 7;
+}
+
+.burg {
+  fill : gold;
+}
+.burg.capital {
+  stroke: white;
+  stroke-width: 4;
+}
+
+.ruin {
+  fill : black;
+}
+
+.rail {
+  stroke : black;
+  stroke-width: 3;
+}

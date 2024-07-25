@@ -2,15 +2,8 @@ var DB = localforage.createInstance({
   name: "Factions"
 });
 
-/*
-  Useful Random Functions 
-*/
-import {RandBetween, SumDice, Likely, Difficulty, ZeroOne, Hash, BuildArray, WeightedString, chance} from "./random.js"
-
 //Core Data 
 import*as Details from "./data.js"
-//Encounters 
-import {Encounter} from "./encounters.js"
 
 /*
   Data Unique to Factions
@@ -170,12 +163,6 @@ const FRONTS = {
     "alignment" : ["good","lawful","neutral","evil","chaotic"]
   }
 }
-
-/*
-  Minion Choices 
-*/
-const MinionList = 'Aberration,Animal,Dragon,Fey,Magical Beast,Undead,Vermin,Genie,Giant,People,Folk/1,1,1,1,1,1,1,1,1,1,1'
-const NeedSpecifics = 'Aberration,Dragon,Magical Beast,Genie,Giant'
 
 /*
   Manage Ranks 

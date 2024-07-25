@@ -82,7 +82,7 @@ class Area {
 
       let chars = party.characters.map(c=> {
         let nd = c.skills[check] - D 
-        let roll = nd > 1 ? chance.dicePool(nd+"d6",[6]) : 
+        let roll = nd > 1 ? chance.dicePool(nd+"d6",[6]) : 1
         return [c.name]
       })
     }) 

@@ -1,4 +1,3 @@
-import {RandBetween, SumDice, Likely, Difficulty, WeightedString, chance} from "./random.js"
 /*
   Contains setting data : elements, magic types, etc 
 */

@@ -4,9 +4,20 @@
 import*as Details from "./data.js"
 
 /*
-  Useful Random Functions 
+  Naming 
 */
-import {RandBetween, SumDice, Likely, Hash, Difficulty,BuildArray, chance} from "./random.js"
+export const Naming = {
+  dungeon (RNG){
+    const template = (place,adj,noun) => RNG.pickone([`The ${place}`,`(The) ${adj} ${place}`,`(The) ${place} of the ${noun}`,`(The) ${noun}'s ${place}`,`${place} of the ${adj} ${noun}`,`(The) ${adj} ${noun}`])
+    
+    let _place = RNG.pickone(`Archive,Blight,Boneyard,Catacomb,Cave(s),Cavern(s),Citadel,Cliff,Crack,Crag,Crypt,Curse,Deep,Delve,Den,Finger,Fist,Fort,Fortress,Grave,Haunt,Hold,Hole(s),Hollow(s),Home,House,Jaws,Keep,Lair,Maw,Maze,Mountain,Mouth,Peak,Pit,Remnant,Retreat,Ruin,Shrine,Skull,Spire,Temple,Throne,Tomb,Tooth,Tower,Tunnel(s),Vault,Warren,Wreck`.split(","))
+    let _adj = RNG.pickone(`Ancient,Ashen,Black,Bloody,Blue,Broken,Burning,Cracked,Dark,Dead,Doomed,Endless,Evil,Fallen,Far,Fearsome,Floating,Forbidden,Forgotten,Frozen,Ghostly,Gloomy,Gray,Grim,Hidden,High,Holy,Iron,Jagged,Lonely,Lost,Low,Misty,Petrified,Red,Screaming,Sharp,Shattered,Shifting,Shivering,Shrouded,Stoney,Sunken,Thorny,Thundering,Unholy,White,Wicked,Withered,Yellow`.split(","))
+    let _noun = RNG.pickone(`Arm,Ash,Beast,Behemoth,Blood,Child,Cinder,Corpse,Crystal,Dagger,Death,Demon,Devil,Doom,Dragon,Eye,Fear,Finger,Fire,Foot,Frog,Ghost,Giant,Goblin,God,Hand,Head,Heart,Horror,Hero,Horn,King,Knave,Priest,Prophet,Queen,Shard,Skull,Souls,Spear,Spirit,Stone,Sword,Troll,Warrior,Water,Witch,Wizard,Worm`.split(","))
+    
+    return template(_place,_adj,_noun)
+  },
+}
+
 
 /*
   Data for generation 

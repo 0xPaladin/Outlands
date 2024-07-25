@@ -1,6 +1,18 @@
 (function() {
   const _ = {}
 
+  //file work 
+  _.get_file = function(url, callback) {
+    let xmlhttp = new XMLHttpRequest();
+    xmlhttp.open("GET", url, true);
+    xmlhttp.onreadystatechange = function() {
+      if (xmlhttp.readyState == 4 && xmlhttp.status == 200) {
+        callback(xmlhttp.responseText);
+      }
+    }
+    xmlhttp.send();
+  }
+
   //String template function 
   _.template = function(strings, ...keys) {
     return [keys, (...values)=>{
@@ -17,8 +29,8 @@
   }
 
   //convert str to HTML 
-  _.wrapToHTML = function (str,data) {
-    let _str = typeof str === "function" ? str(data) : str 
+  _.wrapToHTML = function(str, data) {
+    let _str = typeof str === "function" ? str(data) : str
     return new Function(`return _.html\`${_str}\`;`)()
   }
 
@@ -26,25 +38,25 @@
   _.applyTempate = function(str, data) {
     let pullKeys = /(?<={).*?(?=})/g
     let keys = str.match(pullKeys) || []
-    let vals = keys.map(k=> _.deepGet(data,k))
+    let vals = keys.map(k=>_.deepGet(data, k))
     //replace dot with _ 
-    keys = keys.map(k => k.replace(".","_"))
+    keys = keys.map(k=>k.replace(".", "_"))
 
     //apply html wrapping 
-    let res = new Function(...keys, `return _.html\`${str}\`;`)(...vals) 
+    let res = new Function(...keys,`return _.html\`${str}\`;`)(...vals)
     return res
   }
-  
+
   //Simple roman numeral conversion 
   _.romanNumeral = function(n) {
     var units = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
 
-    if (n < 0 || n >= 20) {
+    if (n < 1 || n >= 20) {
       return n;
     } else if (n >= 10) {
       return "X" + this.romanNumeral(n - 10);
     } else {
-      return units[n];
+      return units[n-1];
     }
   }
 
@@ -71,6 +83,10 @@
       return u
     }
     , [])
+  }
+
+  _.last = function (arr) {
+    return arr[arr.length-1]
   }
 
   // functional sum

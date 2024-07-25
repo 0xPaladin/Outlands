@@ -2,6 +2,10 @@
   V0.3
 */
 
+//svg support 
+//import "../lib/svg.parser.min.js"
+//import "../lib/svg.import.min.js"
+
 /*
   Mixins for standard functions
   Array, Math, Sting...
@@ -20,13 +24,12 @@ const chance = new Chance()
 */
 import "../lib/localforage.min.js"
 const DB = {}
-DB.games = localforage.createInstance({
-  name: "Outlands.Games"
+DB.game = localforage.createInstance({
+  name: "Game"
 });
-DB.state = localforage.createInstance({
-  name: "Outlands.State"
+DB.teams = localforage.createInstance({
+  name: "Teams"
 });
-
 /*
   SVG
   https://svgjs.dev/docs/3.0/getting-started/
@@ -46,7 +49,7 @@ const html = _.html = htm.bind(h);
 */
 import*as UI from './UI.js';
 import {Functions} from './functions.js';
-import {Planes} from './setting.js';
+import * as Setting from './setting.js';
 import * as Scenarios from '../scenarios/index.js';
 import*as Gen from './generate.js';
 
@@ -91,51 +94,55 @@ class App extends Component {
   constructor() {
     super();
     this.state = {
-      show: "AllPlanes",
-      reveal: [],
+      show: "Strand",
+      reveal: new Set(["strand-about","plateByFaction"]),
+      selection: new Map([["team-edit",{}]]),
+      favorites : new Set(),
       dialog: "",
       iframe: null,
       saveName: "",
       savedGames: new Set(),
+      saved: {
+        teams : []
+      },
       generated: [],
       toGenerate: "",
       tick : 0,
     };
 
+    this.db= DB 
     //functions 
     this.functions = Functions
     //Scenarios  
     this.scenarios = Scenarios
     //keep generator functions 
     this.gen = Gen
-    //keep poi 
-    this.poi = Gen.POI
+    //orbital 
+    this.Strand = Gen.Strand
     //global store for generated areas / factions 
     this.activeState = {}
   }
 
   // Lifecycle: Called whenever our component is created
-  async componentDidMount() {
-    let id = await DB.games.getItem("lastGame")
-    if(id) {
-       this.load(id)
-    }
-    else {
-      id = Game.id = chance.natural()
-      this.generate(id)
-      Gen.Scene.enter(this,"")
-      //Gen.Scene.enter(this,"Intro.Begin")
-    }
+  async componentDidMount() { 
+    this.generate() 
 
-    //updated saved game list 
-    let sG = this.state.savedGames
-    DB.games.iterate((g,id)=>{
-      id != "lastGame" ? sG.add([g.name, id]) : null
+    DB.game.getItem("favorites").then(res => {
+      this.state.favorites = new Set(res||[])
+    })
+    
+    DB.teams.iterate((team,key)=>{
+      this.state.saved.teams.push([key,team.name])
     }
     )
 
+    //set super states 
+    this.Strand.setSuperStates(this)
+
     setInterval(()=> {
       this.updateState("tick",this.state.tick+1)
+      DB.game.setItem("favorites",this.state.favorites)
+      
       if(this.activeRegion && this.state.tick%3 == 0){
         this.activeRegion.display()
       }
@@ -154,23 +161,17 @@ class App extends Component {
     GameState = {} 
     this.activeState = {}
 
-    let RNG = new Chance(id)
-
-    //core region maker for planes 
-    Object.keys(Planes).forEach(p=> {
-      let n = RNG.sumDice("2d3+1")
-      _.fromN(n,()=>{
-        new Gen.Region(this,{
-          id : RNG.hash(),
-          plane : p
-        })
-      })
+    //load plates
+    Setting.Plates.forEach(p => {
+      new Gen.Plane(this,Gen.Strand.plates.all.find(_p=>_p.i == p.i))
     })
+
+    let RNG = new Chance(id)
 
     //update game  
     Game.id = id
-    let _animals = [Gen.Encounter({what:"Animal"}),Gen.Encounter({what:"Animal"})]
-    let name = [RNG.randBetween(1,1000),_animals[0].essence[1],_animals[0].tags[1],_animals[1].tags[1]]
+    let _animals = [new Gen.Encounter({what:"Animal"}),new Gen.Encounter({what:"Animal"})]
+    let name = [RNG.randBetween(1,1000),_animals[0].e[1],_animals[0].tags[2],_animals[1].tags[2]]
     Game.name = name.join(" ")
 
     console.log(this.activeState, this.game)
@@ -230,42 +231,41 @@ class App extends Component {
     Get functions 
   */
 
+  get setting () {
+    return {
+      Factions : Setting.Factions,
+      Strand : Gen.Strand
+    }
+  }
+
   get game() {
     return Object.assign({state:GameState},Game) 
   }
 
   get planes() {
-    return Object.values(Planes).map(p => {
-      p.children = this.regions.filter(r => r.plane == p.name)
-      p.parties = p.children.map(r=> r.parties).flat()
+    return Object.values(this.activeState).filter(p=>p.what == "Plane" && p.name).map(p => {
       return p 
     })
   }
 
-  get regions() {
-    return Object.values(this.activeState).filter(p=>p.what == "Region")
-  }
-
-  get parties () {
-    return Object.values(this.activeState).filter(p=>p.what == "Party")
-  }
-
-  get quests() {
-    return Object.values(this.activeState).filter(p=>p.what == "Quest")
-  }
-
-  get activeParty() {
-    return this.activeState[Game.active.party]
-  }
-
-  get activeRegion() {
-    let [w,id] = this.state.show.split(".")
-    return w== "Plane" ? this.regions.find(r=> r.id==id) : null
+  get crews () {
+    return Object.values(this.activeState).filter(o=>o.what == "Crew")
   }
 
   /*
     Render functions 
   */
+
+  toggle (what) {
+    let reveal = this.state.reveal
+    reveal.has(what) ? reveal.delete(what) : reveal.add(what)
+  }
+
+  toggleFavorite (id) {
+    let favorites = this.state.favorites
+    favorites.has(id) ? favorites.delete(id) : favorites.add(id)
+    this.refresh()
+  }
 
   //main function for updating state 
   async updateState(what, val) {
@@ -274,8 +274,9 @@ class App extends Component {
     await this.setState(s)
 
     //check for view 
-    if(what == "show" && val.includes("Plane") && this.activeRegion){
-      this.activeRegion.display()
+    if(what == "show" && val.includes("Plate")){
+      let P = this.activeState[val.split(".")[1]]
+      P ? P.init() : null
     }
   }
 
@@ -310,29 +311,17 @@ class App extends Component {
   //main page render 
   render(props, {show, savedGames}) {
     let view = show.split(".")[0]
-    let rids = this.regions.map(r=>r.id)
 
     //final layout 
     return html`
+    <div class="${view=='Plate'?"":"body-img"} fixed left-0 right-0 top-0 bottom-0"></div>
     <div class="fixed left-0 pa2 z-2">
-      <h1 class="pointer underline-hover ma0" onClick=${()=>this.show = "AllPlanes"}>Outlands</h1>
+      <h1 class="pointer underline-hover ma0" onClick=${()=>this.show = "Strand"}>Cosmic Strand</h1>
     </div>
     <div class="fixed right-0 pa2 z-2">
-      <div class="flex items-center">
-        <div class="f5 b i mh2">${Game.name}</div>
-        <div class="dropdown rtl">
-          <div class="f4 b pointer link dim bg-light-gray br2 pa2">⚙</div>
-          <div class="f4 rtl w-100 dropdown-content bg-white-70 db ba bw1 pa1">
-            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.save()}>Save</div>
-            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.generate()}>Generate New</div>
-            ${[...savedGames].map(sg=> sg[1] == Game.id ? "" : html`<div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.load(sg[1])}>Load ${sg[0]}</div>`)}
-          </div>
-        </div>
-      </div>
-      <div>${this.parties.map(p=> html`<div class="pointer dim bg-lightest-blue mv1 pa1" onClick=${()=>this.show = ["Plane", p.region.id].join(".")}>${p.characters.map(c=>c.name).join(", ")}</div>`)}</div>
-      <div>${[...this.quests].map(q=> q.state.done ? "" : html`<div class="pointer dim bg-light-yellow mv1 pa1">${q.text}</div>`)}</div>
+      <div class="flex items-center"></div>
     </div>
-    <div class="absolute z-1 w-100 mt5 pa2">
+    <div class="absolute z-1 w-100 mt4 pa2">
       ${this.show}
     </div>
     ${this.dialog}
@@ -341,3 +330,22 @@ class App extends Component {
 }
 
 render(html`<${App}/>`, document.getElementById("app"));
+
+/*
+<div class="dropdown rtl">
+          <div class="f4 b pointer link dim bg-light-gray br2 pa2">⚙</div>
+          <div class="f4 rtl w-100 dropdown-content bg-white-70 db ba bw1 pa1">
+            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.save()}>Save</div>
+            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.generate()}>Generate New</div>
+            ${[...savedGames].map(sg=> sg[1] == Game.id ? "" : html`<div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.load(sg[1])}>Load ${sg[0]}</div>`)}
+          </div>
+        </div>
+
+
+
+<div>This is a fan made project by xPaladin.</div>
+      <div>
+        Amazing maps are generated by <a href="https://azgaar.github.io/Fantasy-Map-Generator/" target="_blank">Azgaar's Fantasy Map Generator</a> & <a href="https://watabou.github.io/" target="_blank">Watabou's Procgen Arcana</a>
+      </div>
+*/
+
