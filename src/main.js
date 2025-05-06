@@ -1,351 +1,238 @@
-/*
-  V0.3
-*/
+//https://pure-css.github.io/start/
+//https://picocss.com/docs
 
-//svg support 
-//import "../lib/svg.parser.min.js"
-//import "../lib/svg.import.min.js"
+import {Chance, _} from "./helper.js";
+const Cap = _.capitalize;
+import {Region} from "./region.js";
 
-/*
-  Mixins for standard functions
-  Array, Math, Sting...
-*/
-import "./mixins.js"
+//The Game 
+import {Game} from "./game.js"
 
-/*
-  Chance RNG
-*/
-import "../lib/chance.slim.js"
-const chance = new Chance()
+//Preact with htm 
+import {html, Component, render} from "https://unpkg.com/htm/preact/standalone.module.js";
 
-/*
-  Storage - localforage
-  https://localforage.github.io/localForage/
-*/
-import "../lib/localforage.min.js"
-const DB = {}
-DB.game = localforage.createInstance({
-  name: "Game"
-});
-DB.teams = localforage.createInstance({
-  name: "Teams"
-});
-/*
-  SVG
-  https://svgjs.dev/docs/3.0/getting-started/
-*/
+//About 
+import * as About from "./about.js"
 
-/*
-  UI Resources  
-*/
-//Preact
-import {h, Component, render} from 'https://unpkg.com/preact?module';
-import htm from 'https://unpkg.com/htm?module';
-// Initialize htm with Preact
-const html = _.html = htm.bind(h);
+//Sweet Alert Scenes
+import {EnterScene, Swal} from "./scenes.js"
 
-/*
-  App Sub UI
-*/
-import*as UI from './UI.js';
-import {Functions} from './functions.js';
-import * as Setting from './setting.js';
-import * as Scenarios from '../scenarios/index.js';
-import*as Gen from './generate.js';
 
-/*
-  Game Object 
-*/
-let Game = {
-  "id": "",
-  "name": "",
-  "fame" : {},
-  //items bought 
-  "bought" : {},
-  /*
-    knowledge of Regions and sites
-    key = region id 
-    value = {
-      siteId : # knowledge 
-    }
-    An empty Region means the party knows of it - useful for travel 
-    A site with knowledge means that it is known 
-  */
-  "knowledge" : new Map(),
-  //ways between varions regions : [regionId, regionId] 
-  "ways" : new Set(),
-  //store for ids - quests, parties, characters, and created regions 
-  "toSave": new Set(),
-  //log for information 
-  "log": [],
-  //what is active 
-  "active" : {
-    time : 1
-  }
-}
-
-let GameState = {}
-
-/*
-  Declare the main App 
-*/
+let prng = new Chance()
 
 class App extends Component {
-  constructor() {
-    super();
-    this.state = {
-      show: "Strand",
-      reveal: new Set(["strand-about","plateByFaction"]),
-      selection: new Map([["team-edit",{}]]),
-      favorites : new Set(),
-      dialog: "",
-      iframe: null,
-      saveName: "",
-      savedGames: new Set(),
-      saved: {
-        teams : []
-      },
-      generated: [],
-      toGenerate: "",
-      tick : 0,
-    };
+    constructor() {
+        super();
+        // Initialise our state. For now we only store the input value
+        this.state = {
+            mode: 'create',
+            selected: new Map(),
+            pullRoutes : [],
+            changePlane : null,
+            tick: 0
+        };
 
-    this.db= DB 
-    //functions 
-    this.functions = Functions
-    //Scenarios  
-    this.scenarios = Scenarios
-    //keep generator functions 
-    this.gen = Gen
-    //orbital 
-    this.Strand = Gen.Strand
-    //global store for generated areas / factions 
-    this.activeState = {}
-  }
+        //pull game data 
+        let _game = localStorage.getItem("game") || null;
+        _game = _game == null ? {} : JSON.parse(_game);
+        //has to be same week 
+        let seed = _game._plane && _game.week == this.week ? _game._plane : 'OL'+prng.AlphaSeed(14);
 
-  // Lifecycle: Called whenever our component is created
-  async componentDidMount() { 
-    this.generate() 
+        //use game data 
+        this.region = new Region({seed});
+        this.PSView = null;
 
-    DB.game.getItem("favorites").then(res => {
-      this.state.favorites = new Set(res||[])
-    })
-    
-    DB.teams.iterate((team,key)=>{
-      this.state.saved.teams.push([key,team.name])
+        window.App = this;
+        window.html = html;
     }
-    )
 
-    //set super states 
-    this.Strand.setSuperStates(this)
+    // Lifecycle: Called whenever our component is created
+    async componentDidMount() {
+        localStorage.getItem("game") ? null : this.setSelect('about','Main');
+        //timer 
+        setInterval( () => {
+            this.state.tick++;
+            this.region.ps.raw ? this.region.overlay() : null;
+            this.refresh();
+        }
+        , 1000)
+    }
 
-    setInterval(()=> {
-      this.updateState("tick",this.state.tick+1)
-      DB.game.setItem("favorites",this.state.favorites)
-      
-      if(this.activeRegion && this.state.tick%3 == 0){
-        this.activeRegion.display()
+    refresh() {
+        this.update();
+        this.forceUpdate();
+    }
+
+    setSelect(id, val) {
+        this.state.selected.set(id, val);
+        this.refresh();
+    }
+
+    alert (data) {
+        Swal.fire(data);
+    }
+
+    enterScene (data, noEscape) {
+        EnterScene(data,noEscape);
+    }
+
+    get time () {
+        let _now = Date.now();
+        let _d = Date.now() - (new Date(2025,0,1));
+        let _week = 1000*60*60*24*7;
+        let nDay = 7 * ((_d/_week)%1);
+        let nHr = 24 * (nDay%1);
+        let nMin = 60 * (nHr%1);
+        
+        return [Math.floor(_d/_week),Math.floor(nDay),Math.floor(nHr),Math.floor(nMin),Math.floor(60*(nMin%1))]
+    }
+
+    get week () {
+        return this.time[0]
       }
-    }, 1000)
-  }
 
-  // Lifecycle: Called just before our component will be destroyed
-  componentWillUnmount() {}
-
-  /*
-    Core Save Load and Generate 
-  */
-
-  generate(id=chance.hash()) {
-    //reset 
-    GameState = {} 
-    this.activeState = {}
-
-    //load plates
-    Setting.Plates.forEach(p => {
-      new Gen.Plane(this,Gen.Strand.plates.all.find(_p=>_p.i == p.i))
-    })
-
-    let RNG = new Chance(id)
-
-    //update game  
-    Game.id = id
-    let _animals = [new Gen.Encounter({what:"Animal"}),new Gen.Encounter({what:"Animal"})]
-    let name = [RNG.randBetween(1,1000),_animals[0].e[1],_animals[0].tags[2],_animals[1].tags[2]]
-    Game.name = name.join(" ")
-
-    console.log(this.activeState, this.game)
-    this.refresh()
-  }
-
-  save() {
-    //first save to game 
-    DB.games.setItem("lastGame",Game.id)
-    DB.games.setItem(Game.id, Game)
-
-    //now save individual state 
-    Game.toSave.forEach(id => DB.state.setItem(id,GameState[id]))
-
-    //refresh 
-    this.refresh()
-  }
-
-  async load(id) {
-    //pull game 
-    let game = await DB.games.getItem(id)
-    if (!game) {
-      return
+    //clear all saved data 
+    reset () {
+        Swal.fire({
+            title: `Reset all game data?`,
+            text : 'You will erase all of your points/time, and start over on a new plane. Ok?',
+            showCancelButton : true,
+            confirmButtonColor: "red",
+            confirmButtonText: "Reset",
+        }).then( res => {
+            //clear data, reload page
+            if(res.isConfirmed) {
+                localStorage.clear();
+                location.reload(true);
+            }
+        })
     }
 
-    //first generate 
-    this.generate(id)
-    //write state 
-    let sets = ["toSave","ways"]
-    Object.keys(Game).forEach(k=> Game[k] = sets.includes(k) ? new Set(game[k]) : game[k])
-
-    //load saved
-    let nl = 0
-    await Game.toSave.forEach(async id => {
-      GameState[id] = await DB.state.getItem(id)
-      this.activeState[id] = new Gen[GameState[id].w](this,GameState[id])
-      await this.refresh()
-      nl++     
-      //go to scene after load 
-      nl == Game.toSave.size ? game.active.scene == "freeplay" ? null : Gen.Scene.enter(this,game.active.scene,null) : null
-    })
-  }
-
-  /*
-    Game Functions 
-  */
-  
-  act(f, opts) {
-    //call the function 
-    f(opts)
-    //save
-    //refresh 
-    this.refresh()
-  }
-
-  /*
-    Get functions 
-  */
-
-  get setting () {
-    return {
-      Factions : Setting.Factions,
-      Strand : Gen.Strand
+    //post confirmation 
+    travelRequest ([seed,name]) {
+        Swal.fire({
+            title: `Travel to ${name}?`,
+            text : 'All travel between planes takes 1-6 days.',
+            showCancelButton : true,
+            confirmButtonColor: "#3085d6",
+            confirmButtonText: "Go!",
+        }).then( res => {
+            //handle move 
+            if(res.isConfirmed) {
+                this.state.selected.set('selFeature',null)
+                this.state.changePlane = name;
+                this.region = new Region({seed}) 
+            }
+        })
     }
-  }
 
-  get game() {
-    return Object.assign({state:GameState},Game) 
-  }
+    update() {
+        let {changePlane, pullRoutes} = this.state;
 
-  get planes() {
-    return Object.values(this.activeState).filter(p=>p.what == "Plane" && p.name).map(p => {
-      return p 
-    })
-  }
+        //Initialise
+        if(pullRoutes.length > 0 && this.region.findRoute == null){
+            this.region.findRoute = new Region({seed:pullRoutes[0]});
+        }
+        //pull route data 
+        if(document.getElementById('route') && pullRoutes.length > 0) {
+            let seed = pullRoutes[0];
+            //check for iframe
+            let rframe = document.getElementById('route');
+            let {PSMap={}} = rframe.contentWindow;
+            if(PSMap.name && this.region.findRoute.ps.seed == PSMap.bp.seed){
+                //set name 
+                localStorage.setItem(seed,JSON.stringify([PSMap.name]))
+                //remove find route 
+                this.region.findRoute = null;
+                //remove pullroute
+                this.state.pullRoutes.shift();
+            } 
+        }
+        //skip if no map or already loaded
+        if (!document.getElementById('psmap') || this.region == null || this.region.ps.raw) {
+            return
+        }
 
-  get crews () {
-    return Object.values(this.activeState).filter(o=>o.what == "Crew")
-  }
+        //pull data from iframe 
+        const iframe = document.getElementById('psmap');
+        let {PSMap={}} = this.iWindow = iframe.contentWindow;
 
-  /*
-    Render functions 
-  */
+        //do not process if awaiting new plane
+        if(PSMap.name && changePlane && PSMap.name != changePlane) {
+            return;
+        }
 
-  toggle (what) {
-    let reveal = this.state.reveal
-    reveal.has(what) ? reveal.delete(what) : reveal.add(what)
-  }
+        let islands = PSMap.islands ? PSMap.islands.map(isle=> isle.faces.map(({data,__id__})=>{
+            null != data.site ? data.site.init() : null != data.terrain ? data.terrain.init() : null;
+            return __id__;
+        })) : []
+        if (islands.length == 0) {
+            return;
+        }
 
-  toggleFavorite (id) {
-    let favorites = this.state.favorites
-    favorites.has(id) ? favorites.delete(id) : favorites.add(id)
-    this.refresh()
-  }
+        //link gen to PS 
+        this.region.linkToPS(PSMap,islands);
 
-  //main function for updating state 
-  async updateState(what, val) {
-    let s = {}
-    s[what] = val
-    await this.setState(s)
+        //new game ?
+        if(!this.game){
+            let _game = localStorage.getItem("game") ? JSON.parse(localStorage.getItem("game")) : null;
+            this.game = _game != null && _game.week == this.week ? Game.load(this.week,_game) : new Game(this.week,this.region);
+        }
 
-    //check for view 
-    if(what == "show" && val.includes("Plate")){
-      let P = this.activeState[val.split(".")[1]]
-      P ? P.init() : null
+        //Initialise in storage 
+        localStorage.getItem(this.region.seed) ? null : localStorage.setItem(this.region.seed,JSON.stringify([PSMap.name]));
+
+        //move planes?
+        if(changePlane != null){
+            this.game.changePlane(this.region);
+            this.state.changePlane = null;
+        }
+
+        //adjust PS display 
+        this.PSView = this.iWindow.PSView;
+        this.PSView.applyPreset("cartoon");
+        this.PSView.view.compass.set_visible(0);
+        this.PSView.view.matte.set_visible(0);
+        this.PSView.view.header.set_visible(0);
+        this.PSView.view.setGrid(0);
+
+        console.log(this.region)
+        console.log(this.PSView)
+        console.log(this.game)
     }
-  }
 
-  //main functions for setting view - usine set/get of show 
+    render(props, {selected}) {
+        let _about = selected.get("about") || null
+        
+        let {ps} = this.region;
+        //get data from iframe once loaded 
+        let {name, viewHeight} = ps.raw || {}
+        //window sizing 
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+        let w = viewHeight > width ? width : viewHeight;
+        w = w < height ? height : w;
 
-  refresh() {
-    this.show = this.state.show
-  }
-
-  set show(what) {
-    this.updateState("show", what)
-  }
-
-  get show() {
-    let[what,id] = this.state.show.split(".")
-    return UI[what] ? UI[what](this) : this[what][id].UI ? this[what][id].UI() : ""
-  }
-
-  set dialog(what) {
-    this.updateState("dialog", what)
-  }
-
-  get dialog() {
-    let[what,id] = this.state.dialog.split(".")
-    return what == "" ? "" : UI.Dialog(this)
-  }
-
-  /*
-    Render 
-  */
-
-  //main page render 
-  render(props, {show, savedGames}) {
-    let view = show.split(".")[0]
-
-    //final layout 
-    return html`
-    <div class="${view=='Plate'?"":"body-img"} fixed left-0 right-0 top-0 bottom-0"></div>
-    <div class="fixed left-0 pa2 z-2">
-      <h1 class="pointer underline-hover ma0" onClick=${()=>this.show = "Strand"}>Cosmic Strand</h1>
+        //final layout 
+        return html`
+    <iframe id="psmap" class="center-div" title="Perilous Shores Map - watabou.github.io"
+        width=${w - 10}
+        height=${w - 10}
+        src=${ps.href}
+      >
+    </iframe>
+    <svg id="overlay" class="center-div" width=${w} height=${w} xmlns="http://www.w3.org/2000/svg">
+      </svg>
+    <div class="fixed top-0 left-0 pa2">
+      ${this.region.UI}
     </div>
-    <div class="fixed right-0 pa2 z-2">
-      <div class="flex items-center"></div>
+    <div class="fixed top-0 right-0 pa2">
+      ${this.game ? this.game.UI : ''}
     </div>
-    <div class="absolute z-1 w-100 mt4 pa2">
-      ${this.show}
-    </div>
-    ${this.dialog}
-    `
-  }
+    <div class=${_about == null ? 'dn' : 'center-div w-50 bg-white-80 top-2 pa2 f4'}>
+        ${_about != null ? About[_about]() : ''}
+    </div>`
+    }
 }
 
-render(html`<${App}/>`, document.getElementById("app"));
-
-/*
-<div class="dropdown rtl">
-          <div class="f4 b pointer link dim bg-light-gray br2 pa2">⚙</div>
-          <div class="f4 rtl w-100 dropdown-content bg-white-70 db ba bw1 pa1">
-            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.save()}>Save</div>
-            <div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.generate()}>Generate New</div>
-            ${[...savedGames].map(sg=> sg[1] == Game.id ? "" : html`<div class="tc link pointer dim underline-hover hover-orange pa1" onClick=${()=>this.load(sg[1])}>Load ${sg[0]}</div>`)}
-          </div>
-        </div>
-
-
-
-<div>This is a fan made project by xPaladin.</div>
-      <div>
-        Amazing maps are generated by <a href="https://azgaar.github.io/Fantasy-Map-Generator/" target="_blank">Azgaar's Fantasy Map Generator</a> & <a href="https://watabou.github.io/" target="_blank">Watabou's Procgen Arcana</a>
-      </div>
-*/
-
+render(html`<${App}/>`, document.getElementById('app'));

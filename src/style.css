@@ -1,0 +1,47 @@
+@font-face {
+  font-family: "Exocet Light";
+  src: url("./assets/ExocetLight.ttf");
+}
+
+html {
+  height: 100%;
+  width: 100%;
+  background-color : #EBE8DF;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: "Exocet Light", system-ui;
+}
+
+.center-div {
+  margin: 0;
+  position: absolute;
+  left: 50%;
+  -ms-transform: translate(-50%, 0%);
+  transform: translate(-50%, 0%);
+}
+
+svg {
+  cursor : pointer;
+}
+
+.hex {
+  fill: white;
+  fill-opacity: 0;
+  stroke: green;
+  stroke-width: 2;
+  stroke-dasharray : 5,5;
+  stroke-opacity : 0.6;
+  cursor: pointer;
+}
+.hex:hover {
+  stroke-width : 4;
+  stroke-opacity : 1;
+}
+
+rect.player {
+  fill : blue;
+}
