@@ -29,6 +29,171 @@ const Aligment = {
   ]
 };
 
+const HazardsByTerrain = {
+  _pitfall: (what) => {
+    return {
+      what,
+      skill: "H",
+      enc(pass) {
+        return {
+          text: `A ${this.what} suddenly looms before you. You ${pass ? 'manage to avoid it' : 'take a fall and suffer minor injuries'}.`,
+          hrs: pass ? 1 : 3
+        }
+      }
+    }
+  },
+  _ensnaring: (what) => {
+    return {
+      what,
+      skill: "HR",
+      enc(pass) {
+        return {
+          text: `You've come across ${what} and become ${pass ? 'partially' : 'completely'} ensnared.`,
+          hrs: pass ? 1 : 3
+        }
+      }
+    }
+  },
+  _rough: (what) => {
+    return {
+      skill: "H",
+      what,
+      enc(pass) {
+        return {
+          text: `The ${what} is rough and slows you down.`,
+          hrs: pass ? 0 : 2
+        }
+      }
+    }
+  },
+  _obstacle: (what) => {
+    return {
+      skill: "HR",
+      what,
+      enc(pass) {
+        return {
+          text: `You approach a ${what}.`,
+          hrs: pass ? 0 : 2
+        }
+      }
+    }
+  },
+  _dangerous: (what, str) => {
+    return {
+      what,
+      skill: "H",
+      str,
+      enc(pass) {
+        return {
+          text: `${this.str || 'You approach a'} ${what}.`,
+          hrs: pass ? 0 : 2
+        }
+      }
+    }
+  },
+  'any': (PRNG) => {
+    let what, text, extra, skill;
+
+    let specifics = {
+      impairing: () => {
+        skill = "KR";
+        what = PRNG.pickone("mist,fog,murk,gloom,miasma".split(","));
+        text = () => `A ${what} has set in, impairing visibility and slowing you down.`;
+      },
+      oddity: () => {
+        skill = "K";
+        extra = ["oddity"]
+        what = Generators._oddity(PRNG);
+        text = () => `You've come across a ${what} oddity, causing you to waste time and resources.`;
+      },
+      trap: () => {
+        skill = "R";
+        what = PRNG.pickone(`natural,mechancial,${Generators._magic(PRNG)}`.split(","));
+        text = (pass) => pass ? `You've come across a ${what} trap, and managed to avoid it.` : `You've stubled into a ${what} trap.`;
+      },
+      defense: () => {
+        skill = "KR";
+        what = PRNG.pickone(`natural,mechancial,${Generators._magic(PRNG)}`.split(","));
+        text = (pass) => `You've come across a ${what} barrier, ${pass ? 'but manage to find a way through.' : 'have to spend time navigating around it.'}`;
+      }
+    }
+
+    //run to create hazard  
+    specifics[PRNG.WS("impairing,oddity,trap,defense/1,1,1,1")]()
+
+    return {
+      what,
+      extra,
+      text,
+      skill,
+      enc(pass) {
+        return {
+          text: this.text(pass),
+          hrs: pass ? 0 : 2
+        }
+      }
+    }
+
+    //meteorological: `blizzard,thunderstorm,sandstorm,${Generators._element
+  },
+  'mountain': (PRNG, pass) => {
+    let specifics = {
+      pitfall: () => HazardsByTerrain._pitfall(PRNG.pickone("chasm,crevasse,abyss,rift,ravine".split(","))),
+      seasonal: () => HazardsByTerrain._dangerous("avalanche", "You get caught in an"),
+      obstacle: () => HazardsByTerrain._obstacle(PRNG.pickone("cliff,escarpment,crag,bluff".split(","))),
+      dangerous: () => HazardsByTerrain._dangerous(PRNG.pickone("gyser,volcanic vent,volcanic fissure".split(",")))
+    }
+
+    return specifics[PRNG.WS("pitfall,seasonal,obstacle,dangerous/1,1,1,1")]()
+    //traversable: "river,ravine,crevasse,chasm,abyss"
+  },
+  'hill': (PRNG) => {
+    let specifics = {
+      pitfall: () => HazardsByTerrain._pitfall(PRNG.pickone("chasm,crevasse,abyss,rift,ravine".split(","))),
+      seasonal: () => HazardsByTerrain._dangerous("avalanche", "You get caught in an"),
+      obstacle: () => HazardsByTerrain._obstacle(PRNG.pickone("cliff,escarpment,crag,bluff".split(","))),
+    }
+
+    return specifics[PRNG.WS("pitfall,seasonal,obstacle/1,1,1")]()
+  },
+  'forest': (PRNG) => {
+    let specifics = {
+      ensnaring: () => HazardsByTerrain._ensnaring(PRNG.pickone("marsh,quicksand".split(","))),
+      pitfall: () => HazardsByTerrain._pitfall(PRNG.pickone("chasm,crevasse".split(","))),
+      seasonal: () => HazardsByTerrain._dangerous(PRNG.pickone("fire,flood".split(",")), "You get caught in a"),
+      rough: () => HazardsByTerrain._rough("dense forest"),
+    }
+
+    return specifics[PRNG.WS("pitfall,ensnaring,seasonal,rough/1,1,1,1")]()
+  },
+  'desert': (PRNG) => {
+    let specifics = {
+      ensnaring: () => HazardsByTerrain._ensnaring(PRNG.pickone("tarpit,quicksand".split(","))),
+      pitfall: () => HazardsByTerrain._pitfall(PRNG.pickone("chasm,crevasse".split(","))),
+    }
+
+    return specifics[PRNG.WS("pitfall,ensnaring/1,1")]()
+    //sandstorm 
+  },
+  'swamp': (PRNG) => {
+    let specifics = {
+      ensnaring: () => HazardsByTerrain._ensnaring(PRNG.pickone("mire,bog,marsh,tarpit,quicksand".split(","))),
+      seasonal: () => HazardsByTerrain._dangerous("flood", "You get caught in a"),
+    }
+
+    return specifics[PRNG.WS("ensnaring,seasonal/1,1")]()
+  },
+  'plains': (PRNG) => {
+    let specifics = {
+      ensnaring: () => HazardsByTerrain._ensnaring(PRNG.pickone("mire,marsh,tarpit".split(","))),
+      seasonal: () => HazardsByTerrain._dangerous(PRNG.pickone("fire,flood".split(",")), "You get caught in a"),
+    }
+
+    return specifics[PRNG.WS("ensnaring,seasonal/1,1")]()
+  },
+  'water': (PRNG) => { }
+}
+
 export const FeatureGen = {
   people: (region, o = {}) => {
     let base = region.realm.people || "";
@@ -41,65 +206,22 @@ export const FeatureGen = {
 
     return Creature(o)
   },
-  hazard: (region, o = {}) => {
-    let { seed } = o;
-    let PRNG = new Chance(seed);
-
-    if (PRNG.bool()) {
-      return FeatureGen.obstacle(region, o)
+  hazard: (o = {}) => {
+    let { seed, terrain, rough = false } = o;
+    if (rough) {
+      return HazardsByTerrain._rough("land")
     }
 
-    let _type = PRNG.WS(
-      "oddity,techtonic hazard,volcanic hazard,unseen pitfall,ensnaring,trap,meteorological,seasonal,impairing/1,0.5,0.5,2,2,1,3,1,1"
-    );
-
-    let specifics = {
-      oddity: `${Generators._oddity(PRNG)} oddity`,
-      meteorological: `blizzard,thunderstorm,sandstorm,${Generators._element(
-        PRNG
-      )}-storm`,
-      ensnaring: "bog,mire,tarpit,quicksand",
-      "unseen pitfall": "chasm,crevasse,abyss,rift",
-      trap: `natural trap,mechancial trap,${Generators._magic(PRNG)} trap`,
-      seasonal: "seasonal fire,seasonal flood,seasonal avalanche",
-      impairing: "mist,fog,murk,gloom,miasma"
-    };
+    let PRNG = new Chance(seed);
+    let _terrain = terrain ? PRNG.weighted([terrain, 'any'], [2, 1]) : "any"
+    let _hazard = HazardsByTerrain[_terrain](PRNG);
+    return _hazard;
 
     //extras unnatural or natural
-    let hasE = PRNG.d12() == 1;
-    let extra = PRNG.WS("taint|blight|curse,_magic,_element,_aspect/5,4,2,1");
-    extra = Generators[extra]
-      ? Generators[extra](PRNG)
-      : PRNG.pickone(extra.split("|"));
+    let extra = PRNG.d12() == 1 ? null : Generators[PRNG.WS("_magic,_element,_aspect/4,2,1")];
 
     //faction
     let _faction = _type == "trap" ? FeatureGen.faction(region, o) : null;
-
-    //array of extra text
-    let eArr = [];
-    let type = specifics[_type] ? PRNG.pickone(specifics[_type].split(",")) : _type;
-    hasE ? eArr.push(extra) : null;
-
-    let text = `${type}${eArr.length > 0 ? ` [${eArr.join(", ")}]` : ""
-      }`;
-
-    //determine terrain type 
-    let _terrain = 'any'
-    if ('bog,mire,tarpit'.includes(type)) {
-      _terrain = 'swamp'
-    }
-    else if (_type == "unseen pitfall" || type.includes('avalanche')) {
-      _terrain = 'mountain,hill'
-    }
-    else if (type.includes('fire')) {
-      _terrain = 'forest,plains,mountain,hill'
-    }
-    else if (type.includes('flood')) {
-      _terrain = 'forest,plains,swamp'
-    }
-    else if (type.includes('sand')) {
-      _terrain = 'desert'
-    }
 
     return {
       what: "hazard",
@@ -110,58 +232,6 @@ export const FeatureGen = {
       _terrain,
       text
     }
-  },
-  obstacle: (region, o = {}) => {
-    let { seed } = o;
-    let PRNG = new Chance(seed);
-
-    let _type = PRNG.WS(
-      "oddity,defensive,impenetrable,penetrable,traversable/1,2,3,3,3"
-    );
-    let specifics = {
-      oddity: `${Generators._oddity(PRNG)} oddity`,
-      defensive: `natural defense,mechancial defense,${Generators._magic(
-        PRNG
-      )} defense`,
-      impenetrable: `cliff,escarpment,crag,bluff,${Generators._magic(
-        PRNG
-      )} barrier`,
-      penetrable: "dense forest,gyser field",
-      traversable: "river,ravine,crevasse,chasm,abyss"
-    };
-    let type = specifics[_type] ? PRNG.pickone(specifics[_type].split(",")) : type;
-
-    //extras unnatural or natural
-    let extra =
-      PRNG.d12() == 1
-        ? Generators[PRNG.WS("_magic,_element,_aspect/7,4,1")](PRNG)
-        : null;
-
-    //faction
-    let _faction = _type == "defensive" ? FeatureGen.faction(region, o) : null;
-    let text = `${type}` + (extra ? ` [${extra}]` : "");
-
-    //determine terrain type 
-    let _terrain = 'any'
-    if ('cliff,escarpment,crag,bluff'.includes(type)) {
-      _terrain = 'mountain'
-    }
-    else if (type.includes('forest')) {
-      _terrain = 'forest'
-    }
-    else if ('ravine,crevasse,chasm,abyss'.includes(type)) {
-      _terrain = 'mountain,hill,forest,plains,swamp'
-    }
-
-    return {
-      what: "obstacle",
-      _faction,
-      _type,
-      _terrain,
-      type,
-      text,
-      extra
-    };
   },
   _dungeon: (o) => {
     let { seed } = o;
@@ -178,11 +248,16 @@ export const FeatureGen = {
       PRNG
     );
 
+    const depth = PRNG.weighted(
+      [1, 2, PRNG.d4() + 1, PRNG.Range(3, 8)],
+      [8, 8, 3, 1]
+    )
+
     type = o.type || type;
     let specifics = "lair|den|hideout".includes(type) ? lair : null;
     let text = type + (specifics ? ` [${specifics}]` : '')
 
-    return { type, specifics, text };
+    return { type, specifics, depth, text };
   },
   dungeon: (region, o = {}) => {
     let { seed } = o;
@@ -237,28 +312,11 @@ export const FeatureGen = {
       _terrain: ''
     };
 
-    let type = data.type = PRNG.pickone(["outpost", "landmark", "resource"]);
+    let type = data.type = PRNG.WS("landmark,resource/2,1");
     let _faction = null;
     let text = type;
 
     let specifics = {
-      outpost: () => {
-        //faction
-        _faction = FeatureGen.faction(region, o);
-
-        let text = WSPick(
-          "tollhouse|checkpoint,meeting|trading post,camp|roadhouse|inn,tower|fort|base/2,3,3,1",
-          "|",
-          PRNG
-        );
-
-        //get terrain 
-        data._terrain = PRNG.WS('plains,forest,mountain/4,2,1');
-
-        return {
-          text
-        };
-      },
       landmark: () => {
         let _odd = Generators._oddity(PRNG);
         let _magic = Generators._magic(PRNG);
@@ -270,7 +328,7 @@ export const FeatureGen = {
         let text = `landmark [${type == 'faction' ? _faction.type + ' faction' : type}]`;
 
         //determine routes - landmark always a route to another plane 
-        let route = PRNG.pickone(["=", ">"]) + "OL" + PRNG.AlphaSeed(14);
+        let route = "OL" + PRNG.AlphaSeed(14);
 
         //get terrain 
         data._terrain = type.includes('oddity') || type == 'water-based' || type.includes('magic') ? 'any' : 'mountain,hill,forest,plains,swamp'
@@ -349,7 +407,7 @@ export const FeatureGen = {
 
     //routes to other planes 
     let nRoute = PRNG.pickone([0, 1]) + (sz > 2 ? sz - 2 : 0);
-    let routes = nRoute == 0 ? [] : _.fromN(nRoute, () => PRNG.pickone(["=", ">"]) + "OL" + PRNG.AlphaSeed(14));
+    let routes = nRoute == 0 ? [] : _.fromN(nRoute, () => "OL" + PRNG.AlphaSeed(14));
 
     //develop string for MFCG - use new rng
     let size = [3, 7, 15, 25, 35, 45][sz];

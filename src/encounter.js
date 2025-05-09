@@ -1,3 +1,5 @@
+import { SiteEncounters, DungeonEncounters } from "./encounter-site.js";
+
 import { Chance, _ } from "./helper.js";
 
 const prng = new Chance();
@@ -6,17 +8,17 @@ const Reward = (R, h) => {
     let { game } = window.App;
     let { _safetyMod, _people, _hazards, factions, nc } = R;
     let { _terrain, site = {}, _feature = {} } = h;
-    let pts = 3;
+    let pts = 0;
     let route = "";
     let extra = '';
 
     if (_terrain == "settlement") {
         //points 
-        pts = 3 + site.scale;
+        pts = site.scale;
         //routes
         let added = false
         site.routes.forEach(r => {
-            let _added = game.addRoute(R.seed + r);
+            let _added = game.addRoute([R.seed, r].join("|"));
             added = added || _added;
         })
         route = added;
@@ -36,7 +38,7 @@ const Reward = (R, h) => {
             pts = 5;
             extra = `You've found a ${site.text}.`
             //route 
-            route = game.addRoute(R.seed + site.landmark.route);
+            route = game.addRoute([R.seed, site.landmark.route].join("|"));
         } else if (site.resource) {
             pts = 12;
             extra = `You've found a ${site.text}.`
@@ -56,161 +58,323 @@ const EncounterText = {
     "people": (what, people, pass) => {
         let isBandit = BanditGroups.includes(what.type);
         let hrs = pass ? 0 : isBandit ? 6 : 2;
-        let pts = pass ? 1 + (isBandit ? 4 : 0) : isBandit ? -3 : 0;
+        let pts = pass ? 1 + (isBandit ? 2 : 0) : 0;
+        let coin = pass ? 5 + (isBandit ? 10 : 0) : isBandit ? -10 : 0;
 
         let _base = people != null ? people.short : '';
-        _base = what.what == "faction" ? `members from the local ${what.type} faction` : `a group of local ${_base == '' ? '' : _base + ' '}${what.type}`
+        _base = what.what == "faction" ? `members from the local ${what.type} faction` : `a group of local ${_base == '' ? '' : _base + ' '}${what.type || ''}`
         let text = `You've encountered ${_base}.`
         if (hrs > 0 && isBandit) {
-            text += ` They roughed you up and took some of your things. You lost ${Math.abs(pts)} points and ${hrs} hours.`
+            text += ` They roughed you up and took some of your things. You lost 10 coin and ${hrs} hours.`
         } else if (hrs > 0) {
             text += ` You lost ${hrs} hours to their questions.`
         } else if (pts > 0) {
-            text += isBandit ? ` You got the drop on the rogues and managed sto steal some of their loot.` : ` You swaped stories and some trinkets with them.`
+            text += isBandit ? ` You got the drop on the rogues and managed to steal some of their loot - you got ${coin} coin.` : ` You swaped stories and some baubles with them, you got ${coin} coin.`
         }
 
         return {
             hrs,
             pts,
+            coin,
             text
         }
     }
-    ,
-    "creature": (what, pass) => {
-        let attitude = pass ? prng.pickone(["inquisitive", "docile"]) : prng.pickone(["predatory", "angry"]);
-        let text = `You encounter a ${attitude} ${what.short}.`
-        let hrs = pass ? 0 : 6;
-
-        const failText = {
-            'a': ` You have to give it a wide berth and you lose ${hrs} hours.`,
-            'b': ` You escape, barely. You have to spend ${hrs} hours treating some minor wounds.`
-        }
-        text += pass ? '' : failText[prng.pickone(Object.keys(failText))];
-
-        return {
-            text,
-            hrs,
-            pts: pass ? 1 : 0
-        }
-    }
-    ,
-    "obstacle": (what, pass) => {
-        //obstacles don't hurt, they take more time 
-        let hrs = pass ? 2 : 6;
-        let text = `You've come across ${what.type} and have to navigate it. Its taken you an extra ${hrs} hours.`
-        return {
-            text,
-            hrs,
-            pts: pass ? 2 : 0
-        };
-    }
-    ,
-    "hazard": (what, pass) => {
-        //hazards can hurt TBD
-        let hrs = pass ? 0 : 6;
-        let text = `You've encountered ${what.text}`
-        text += pass ? `, but you managed to avoid it unscathed.` : `. You made it past, but you have to spend ${hrs} hours tending your wounds.`
-        return {
-            text,
-            hrs,
-            pts: pass ? 1 : 0
-        };
-    }
-    ,
 }
 
 /*
-    Notify 
+    Dice Results
 */
-const Notify = (text) => {
-    App.alert({
-        html: `<div class="f3">${text}</div>`,
-    })
+const DiceResults = (check = []) => {
+    //dice
+    let dice = `<img src="src/assets/d10-outline.svg" width="40" height="40" />`
+    let [_pass, pf, roll, skill, val] = check;
+    return check.length == 0 ? `` : `
+        <div class="flex justify-center">
+            ${pf.map((r, i) => `
+            <div class="relative">
+                ${dice}
+                <div class="absolute w-100 tc f3 b ${r ? 'green' : 'red'}" style="top:10%">${roll[i]}</div>
+            </div>`).join("")}
+        </div>`;
 }
 
 /*
     Generate encounter 
 */
-export const Encounter = (R, h) => {
+export const Encounter = (R, h, isSearch) => {
+    let { Swal } = window;
     let { game } = window.App;
-    let { _safetyMod, _people, _hazards, factions, _creatures, nc } = R;
-    let { _terrain, site = null } = h;
-    let _what = prng.DicePick("creature,hazard,site,faction,people/4,7,11,12", prng.d12() + _safetyMod);
-    _what = _terrain == "settlement" ? prng.WS('people,faction/3,1') : _what;
+    let { _safetyMod, _people, factions, _creatures, nc } = R;
+    let { _terrain, _site = null, _feature } = h;
+    //difficulty of skill check
+    let diff = _feature ? _feature.diff : h.diff;
 
+    //determine what they faces 
+    let _roll = prng.d12() + _safetyMod;
+    let _what = prng.DicePick("creature,hazard,site,people,quiet/2,4,6,8", _roll);
+    if (!isSearch) {
+        _what == "site" ? 'people' : _what;
+    }
+    else if ('settlement,dungeon'.includes(_terrain) || (_site && _site.what == 'dungeon')) {
+        _what = _site && _site.what == 'dungeon' ? 'dungeon' : _terrain;
+    }
+    else if (_site) {
+        _what = 'local';
+    }
+
+    let pts = 0;
+    let coin = 0;
+    let route = false;
     let res = {};
+    let check = null;
+
+    const LocalResolve = () => {
+        pts += (res.pts || 0) + (isSearch ? 3 : 0);
+        coin += (res.coin || 0);
+
+        //mod game 
+        game.addPoints(pts);
+        game.addTime(res.hrs);
+        game._items.coin += coin;
+
+        //text 
+        res.text += res.extra ? " " + res.extra : '';
+        res.text += pts > 0 ? ` You earned ${pts} points.` : ``;
+        res.text += route ? ` You learned of a new route.` : ``;
+
+        //notify of result 
+        Swal.fire({
+            title: _.capitalize(_what),
+            html: `<div class="f3">${res.text}</div>${DiceResults(check || [])}`
+        })
+
+        //save
+        game.save();
+    }
 
     let _encounter = {
+        settlement: () => {
+            //points 
+            pts = h.site.scale;
+            //routes
+            h.site.routes.forEach(r => {
+                let _added = game.addRoute([R.seed, r].join("|"));
+                route = route || _added;
+            })
+
+            //determine encounter
+            _encounter.people();
+        },
         creature: (what = null) => {
-            let pass = prng.d4() == 1;
+            //don't get a chance to interact with hazard - save is automatic 
+            check = game.skillCheck(prng.WS('H,K,R/4,1,2'), diff);
             //creature encountered 
             what = what || (nc > 0 && prng.bool() ? prng.pickone(_creatures.slice(0, nc)) : prng.pickone(_creatures));
-            //determine text based upon pass or not 
-            res = EncounterText.creature(what, pass);
-            //id of creature
-            let _id = what.seed.slice(17);
+            //determine how to resolve 
+            let _opts = [
+                ['H: Face it head on and fight; +1 Trinket.', 'T1'],
+                ['K: Look for a way to sneak around it; -2 hours.', 'H-2'],
+                ['R: Try to outsmart and distract it; +1 Points.', 'P1']
+            ];
+            let opts = [
+                [`A ${what.short} approaches...`, _opts.map(o => o[0]).join("/"), _opts.map(o => o[1]).join("/")],
+                [`You are supprised by a ${what.short}...`, [_opts[0][0], _opts[2][0]].join('/'), [_opts[0][1], _opts[2][1]].join('/')],
+                [`You sneak up on a ${what.short}...`, _opts.map(o => o[0]).join("/"), _opts.map(o => o[1]).join("/")],
+            ]
+            //select encounter
+            let _enc = prng.pickone(opts);
             //check if seen before - if not gain points 
+            let _id = what.seed.slice(17);
             if (!game.known.includes(_id)) {
                 game.known.push(_id);
-                res.text += ` You write a few notes about it in your journal.`
-                res.pts += 2;
+                game.addPoints(2);
+                _enc.push(`You write a few notes about it in your journal.`)
             }
+            //run encounter
+            RunLoopEncounter(game, _enc, diff);
         }
         ,
         hazard: () => {
-            let pass = prng.bool();
-            let what = _hazards.filter(hz => hz._terrain == 'any' || hz._terrain.includes(_terrain));
-            //if no hazard exists 
-            what = what.length == 0 ? {
-                what: "obstacle",
-                type: "rough terrain"
-            } : prng.pickone(what);
-            //build text and base time/pts 
-            res = EncounterText[what.what](what, pass)
+            //don't get a chance to interact with hazard - save is automatic 
+            check = game.skillCheck(_feature.hazard.skill, diff);
+            res = _feature.hazard.enc(check[0]);
+            res.text += res.hrs > 0 ? ` You lost ${res.hrs} hours.` : ''
+            res.pts = check[0] ? 1 : 0;
+            return LocalResolve()
         }
         ,
         site: () => {
-            let pass = prng.bool();
-            let type = prng.weighted(["bandits", "explorers", "guards", "merchants", "prospectors", "hunters"], [2, 1, 1, 1, 1, 1]);
-            res = EncounterText.people({
-                type
-            }, null, pass);
+            let _enc = prng.pickone(SiteEncounters)
+            RunLoopEncounter(game, _enc, diff);
         }
         ,
-        faction: () => {
-            let pass = prng.d4() > 1;
-            if (factions.length == 0) {
-                return _encounter.people();
-            }
-            let _f = prng.pickone(factions);
-            _f.what == 'faction' ? res = EncounterText.people(_f, null, pass) : _encounter.creature(_f);
-        }
-        ,
-        people: () => {
-            let pass = prng.d4() > 1;
-            let people = _people.length > 1 ? (prng.bool() ? _people[0] : prng.pickone(_people.slice(1))) : _people[0];
-            let type = prng.WS('farmers,laborers/1,1')
-            let _faction = factions.length == 0 || prng.bool() ? {
-                type
-            } : prng.pickone(factions);
+        dungeon: () => {
+            let _enc = prng.pickone(DungeonEncounters);
+            _enc[0] = h.name + " - " + _enc[0];
+            RunLoopEncounter(game, _enc, diff);
+        },
+        local: () => {
+            //determine encounter
+            let _enc = prng.pickone(SiteEncounters);
 
+            if (_site.landmark) {
+                _enc[2] += ',P5';
+                _enc.push(`You've found a ${_site.text}.`);
+                //route 
+                route = game.addRoute([R.seed, _site.landmark.route].join("|"));
+            } else if (_site.resource) {
+                _enc[2] += ',P10';
+                _enc.push(`You've found a ${_site.text}.`)
+            }
+
+            RunLoopEncounter(game, _enc, diff);
+        },
+        people: () => {
+            //usually pass, no skill check
+            let pass = prng.d4() > 1;
+            //determine people 
+            let people = _people.length > 1 ? (prng.bool() ? _people[0] : prng.pickone(_people.slice(1))) : _people[0];
+            //determine faction
+            let _factions = factions.filter(f => f.what == 'faction');
+            let _faction = _factions.length == 0 || prng.bool() ? { type: prng.WS('farmers,laborers,hunters/1,1,1') } : prng.pickone(_factions);
+            //determine text based upon pass or not
             res = EncounterText.people(_faction, people, pass);
+            return LocalResolve();
+        },
+        quiet: () => {
+            res = {
+                text: "You've encountered nothing of note.",
+                hrs: 0,
+                pts: 0
+            }
+            return LocalResolve();
         }
     };
+    console.log(_what)
     _encounter[_what]();
+}
 
-    //determine Reward
-    let { pts, route, extra } = Reward(R, h);
-    pts += res.pts;
+/*
+    Resolve Encounter - Update Game and Notify
+*/
+const RewardIds = {
+    C: "coin",
+    H: "hours",
+    P: "points",
+    S: "supply",
+    T: "trinkets",
+    R: "relics",
+    Q: "quest"
+}
 
-    //text 
-    res.text += extra.length > 0 ? " " + extra : '';
-    res.text += pts > 0 ? ` You earned ${pts} points` : ``;
-    res.text += route ? ` and learned of a new route.` : pts == 0 ? '' : '.';
-
+const Resolve = (game, title, check, reward) => {
+    let { Swal } = window;
     //mod game 
-    game.points += pts;
-    game.addTime(res.hrs);
+    console.log(reward)
+    let text = reward.reduce((txt, r) => {
+        let [id, val] = [r.slice(0, 1), Number(r.slice(1))];
+        //get reward id
+        let _rid = RewardIds[id];
+        //update game
+        game.reward(_rid, val);
+        //update text
+        txt.push(`<span>${val} ${_rid}</span>`)
+        return txt;
+    }, [])
+    //game.addTime(res.hrs);
+    let html = `
+    <div class="f3">${check.length == 0 || check[0] ? 'Success!' : 'Failure.'}</div>
+    ${DiceResults(check)}`
+
+    //Rewards 
+    html += text.length > 0 ? `<div class="f3"><b>Reward:</b> ${text.join(', ')}.</div>` : '';
     //notify of result 
-    Notify(res.text);
+    Swal.fire({
+        title,
+        html
+    });
+    //save
+    game.save();
+}
+
+/*    
+    Loop Encounters
+    example site : ['Explorer’s Campground', 'HR: +5 Coin, +1 Quest Item/KR: +1 Quest Item, +1 Trinkets', 'C5,Q1/Q1,T1']
+*/
+
+const RunLoopEncounter = async (game, enc, diff) => {
+    let { Swal } = window;
+    let [title, options, reward, text = ''] = [enc[0], enc[1].split("/"), enc[2].split("/")];
+    console.log(enc);
+
+    //fire swal
+    const { value: action } = await Swal.fire({
+        title,
+        html: text != '' ? `<div class="f3">${text}</div>` : '',
+        input: "select",
+        inputOptions: Object.fromEntries(options.map((o, i) => [i, o])),
+        inputPlaceholder: "Select an action",
+    })
+    if (action) {
+        //get skill and check 
+        let _skill = options[Number(action)].split(":")[0];
+        _skill == 'Any' ? _skill = 'HKR' : null;
+        let check = _skill == "Free" ? [] : game.skillCheck(_skill, diff);
+        let _reward = reward[Number(action)].split(",");
+
+        if (_skill == "Free" || check[0]) {
+            //successful check
+            _reward.push("P4");
+            Resolve(game, title, check, _reward);
+        }
+        else if (game.stamina[0] > 0) {
+            //failed check
+            ReRoll(game, title, check, _reward);
+        }
+        else {
+            //failed check
+            Resolve(game, title, check, ["P3"]);
+        }
+    }
+}
+
+const ReRoll = (game, title, check, reward) => {
+    let _title = title;
+    let html = `
+    <div class="f3">You failed the check.</div>
+    ${DiceResults(check)}
+    <div class="f3">A reroll costs 1 Stamina.</div>`
+    //fire swal
+    Swal.fire({
+        title: `${title} ReRoll?`,
+        html,
+        showCancelButton: true,
+        confirmButtonText: "ReRoll",
+        cancelButtonText: "Cancel"
+    }).then(res => {
+        //check how many remains
+        let _diff = check[1].filter(r => !r).length;
+        //confirm reroll
+        if (res.isConfirmed) {
+            game.reduceStamina();
+            //check : [true, [], roll, _skill, val]
+            let _check = game.skillCheck(check[3], _diff);
+            if (_check[0]) {
+                //successful check
+                reward.push("P4");
+                Resolve(game, _title, _check, reward)
+            }
+            else if (game.stamina[0] == 0) {
+                //failed check
+                Resolve(game, _title, _check, ["P3"])
+            }
+            else {
+                ReRoll(game, _title, _check, reward)
+            }
+        }
+        else {
+            //notify of result
+            Resolve(game, _title, check, ["P3"]);
+        }
+    })
 }
