@@ -196,7 +196,7 @@ export const Encounter = (R, h, isSearch) => {
         ,
         hazard: () => {
             //don't get a chance to interact with hazard - save is automatic 
-            check = game.skillCheck(_feature.hazard.skill, diff);
+            check = game.skillCheck(_feature.hazard.skill || "HKR", diff);
             res = _feature.hazard.enc(check[0]);
             res.text += res.hrs > 0 ? ` You lost ${res.hrs} hours.` : ''
             res.pts = check[0] ? 1 : 0;
@@ -250,7 +250,7 @@ export const Encounter = (R, h, isSearch) => {
             return LocalResolve();
         }
     };
-    console.log(_what)
+    console.log(_roll, _what);
     _encounter[_what]();
 }
 
@@ -307,10 +307,13 @@ const RunLoopEncounter = async (game, enc, diff) => {
     let [title, options, reward, text = ''] = [enc[0], enc[1].split("/"), enc[2].split("/")];
     console.log(enc);
 
+    let html = `
+    <div class="f3">Difficulty ${diff}${diff > 1 ? `; ${diff}x the coin & trinket reward.` : ''}</div>
+    <div class="f3">${text}</div>`;
     //fire swal
     const { value: action } = await Swal.fire({
         title,
-        html: text != '' ? `<div class="f3">${text}</div>` : '',
+        html,
         input: "select",
         inputOptions: Object.fromEntries(options.map((o, i) => [i, o])),
         inputPlaceholder: "Select an action",
@@ -320,7 +323,11 @@ const RunLoopEncounter = async (game, enc, diff) => {
         let _skill = options[Number(action)].split(":")[0];
         _skill == 'Any' ? _skill = 'HKR' : null;
         let check = _skill == "Free" ? [] : game.skillCheck(_skill, diff);
-        let _reward = reward[Number(action)].split(",");
+        //increase reward based upon diff 
+        let _reward = reward[Number(action)].split(",").map(r => {
+            let [rid, val] = [r.slice(0, 1), Number(r.slice(1))];
+            return 'CT'.includes(rid) ? rid + (val * diff) : r;
+        });
 
         if (_skill == "Free" || check[0]) {
             //successful check

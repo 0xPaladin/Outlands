@@ -62,6 +62,7 @@ export const SettlementAction = async (game, id) => {
   }[id];
   await act();
 
+  game._camp = true;
   //takes 8 hours
   game.addTime(8);
 
