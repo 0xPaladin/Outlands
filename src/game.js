@@ -1,6 +1,9 @@
 import { Chance, _ } from "./helper.js";
 let prng = new Chance();
 
+//actions 
+import * as Actions from "./actions.js";
+
 /*
   Soruce
   https://thealexandrian.net/wordpress/46101/roleplaying-games/5e-hexcrawl-part-2-wilderness-travel
@@ -38,43 +41,64 @@ const ConditionMod = {
   StormPowerful: 0.5
 };
 
-export const Explore = (R, h1) => {
-  //hazards
-  let hz = R._hazards.filter(_hz => _hz._terrain == 'any' || _hz._terrain.includes(h1._terrain));
-}
-export const Travel = (R, h1, h2) => {
-  //hazards
-  let hz = R._hazards.filter(_hz => _hz._terrain == 'any' || _hz._terrain.includes(h1._terrain) || _hz._terrain.includes(h2._terrain));
-  //distance between
-  let d = 12;
-  //time to travel 
+/*
+  Starting Backgrounds for play 
+  Glide 
+  https://sasquatchgames.itch.io/glide
+  Hardy (abbreviated to H) characters can survive in the harsh environment
+  of Eridoor, possesses strong physical ability, and great resolve.
+  Knowledgeable (abbreviated to K) characters know where to search
+  for items, how to navigate the world on their Glider, and are skilled
+  with technologies.
+  Resourceful (abbreviated to R) characters know how to solve a
+  problem with minimal resources, where to look to find answers, and
+  always have a solution on-hand.
+*/
+const Backgrounds = {
+  "soldier": [6, 4, 5],
+  "merchant": [5, 6, 4],
+  "explorer": [5, 4, 6],
+  "scoundrel": [4, 5, 6],
+  "navigator": [4, 6, 5],
+  "freelancer": [6, 5, 4],
 }
 
-//R = starting region
+
 export class Game {
   constructor() {
     //pull data 
-    let { week, region } = window.App;
+    let { day, region } = window.App;
 
     this.seed = prng.AlphaSeed();
-    //format data into JSON 
-    this.week = week;
     //plane and hex 
     this._plane = region.seed;
     this._hex = region.start;
-    //points and time 
-    this.points = 0;
-    this.time = 0;
-    //harm 
-    this.wounds = [0, 0, 0, 0];
-    //pace
-    this.pace = "Normal"
+    //points and time : day, pts, time, total pts, total time
+    this._pt = [day, 0, 0, 0, 0];
+    //fame
+    this.fame = 0;
+    //items - coin, supply, trinkets, relics
+    this._items = {
+      coin: 50,
+      supply: [3, 3],
+      trinkets: [0, 5],
+      relics: [0, 1],
+      quest: 0,
+    };
+    //stats 
+    this._bg = prng.pickone(Object.keys(Backgrounds));
+    this.stats = Backgrounds[this._bg].slice();
+    //stamina
+    this.stamina = [5, 5];
+    this._camp = true;
+
+    this.pace = "Normal";
 
     //get known routes and exploration 
     this._routes = []
     this.known = localStorage.getItem(this._plane) ? JSON.parse(localStorage.getItem(this._plane)) : [this.plane.name];
 
-    _.fromN(2, () => this.addRoute(region.seed + "=" + "OL" + prng.AlphaSeed(14)));
+    _.fromN(2, () => this.addRoute(region.seed + "|" + "OL" + prng.AlphaSeed(14)));
   }
 
   addRoute(r) {
@@ -88,26 +112,69 @@ export class Game {
   }
 
   /*
+    Point Functions
+  */
+  get points() {
+    return this._pt[1];
+  }
+  addPoints(p) {
+    this._pt[1] += p;
+    this._pt[3] += p;
+  }
+
+  /*
     Time Functions
   */
+  get time() {
+    return this._pt[2];
+  }
 
   addTime(t) {
+    let encounter = false;
+    if (t < 0) {
+      this._pt[2] += t;
+      this._pt[4] += t;
+      return;
+    }
     //8 hour chunks 
     while (t > 0) {
       let _t = t > 8 ? 8 : t;
       //add time 
-      this.time += t;
+      this._pt[2] += _t;
+      this._pt[4] += _t;
       t -= _t;
 
       //if time puts active hours over 16, sleep and mark new day 
       if (this.time % 24 > 16) {
-        this.time += 8;
         this.newDay();
+        encounter = true;
       }
     }
+    return encounter;
   }
 
-  newDay() { }
+  newDay() {
+    this._pt[2] += 8;
+    this._pt[4] += 8;
+    //stamina 
+    this._camp = this._camp ? false : this.reduceStamina();
+    //TODO weather 
+  }
+
+  //Stamina 
+  reduceStamina() {
+    this.stamina[0]--;
+    if (this.stamina[0] == 0 && this._items.supply[0] > 0) {
+      this._items.supply[0]--;
+      this.stamina[0] = 3;
+    }
+    else if (this.stamina[0] == 0) {
+      window.Swal.fire({
+        title: 'No Stamina & No Supply!',
+        text: '-5 points! You are out of stamina and supply. You must rest to regain stamina.'
+      })
+    }
+  }
 
   takeWound(rank) {
     this.wounds[rank] == 2 ? this.takeWound(rank + 1) : null;
@@ -130,7 +197,7 @@ export class Game {
   get neighbourIds() {
     return this.hex.getNeighbours().map(({ _id }) => _id);
   }
-  get stats() {
+  get gameStats() {
     //get ids of planes
     let _ids = this._routes.reduce((ids, r) => {
       //get plane ids 
@@ -151,6 +218,61 @@ export class Game {
       //return stats
       return stat;
     }, { planes: 0, hex: 0, creature: 0 })
+  }
+
+  /*
+    Handle actions
+  */
+  async act(id) {
+    const SettlementActions = ["Rest", "Resupply", "SellTrinkets", "RelicForFame"];
+    if (id == "Explore") {
+      return this.search();
+    }
+    else if (SettlementActions.includes(id)) {
+      return Actions.SettlementAction(this, id);
+    }
+    else {
+      Actions[id](this);
+      //save 
+      this.save();
+    }
+  }
+
+  skillCheck(skill, d) {
+    let { stats } = this;
+    let abrv = ["H", "K", "R"];
+    //track skill used
+    let _skill = "";
+    //find max skill if multiple are provided
+    let val = skill.split("").reduce((max, id) => {
+      let _v = stats[abrv.indexOf(id)]
+      _skill = _v > max ? id : _skill;
+      return max > _v ? max : _v;
+    }, -1);
+    //roll d10 
+    let roll = _.fromN(d, () => prng.d10());
+    //provide results 
+    return roll.reduce((res, r) => {
+      res[1].push(r <= val);
+      res[0] = res[0] && r <= val
+      return res;
+    }, [true, [], roll, _skill, val])
+  }
+
+  /*
+    Reward
+  */
+  reward(id, val) {
+    if ('coin,quest'.includes(id)) {
+      this._items[id] += val;
+    }
+    else if (this._items[id]) {
+      this._items[id][0] += val;
+      this._items[id][0] > this._items[id][1] ? this._items[id][0] = this._items[id][1] : null;
+    }
+    else {
+      id == "hours" ? this.addTime(val) : id == "points" ? this.addPoints(val) : null;
+    }
   }
 
   /*
@@ -176,11 +298,12 @@ export class Game {
 
   moveTo(h2) {
     //add time 
-    this.addTime(this.getTravelTime(h2));
+    let _encounter = this.addTime(this.getTravelTime(h2));
     //move to hex 
     window.App.face = null;
     this._hex = h2.face._id;
     //encounter
+    _encounter ? this.plane.encounter(this.hex.data, false) : null;
     this.save();
   }
 
@@ -192,7 +315,8 @@ export class Game {
 
     //advance time 1d4 days 
     let hrs = prng.Range(16, 96);
-    this.time += hrs;
+    this._pt[2] += hrs;
+    this._pt[4] += hrs;
     //save 
     this.save();
   }
@@ -209,13 +333,16 @@ export class Game {
 
   //search current hex 
   search() {
+    //requires stamina 
+    this.reduceStamina();
+    //search time
     let st = this.searchTime;
     //add time and push hex 
     this.addTime(st);
     //push explored
     this.known.push(this._hex);
     //check for encounter 
-    this.plane.encounter(this.hex.data);
+    this.plane.encounter(this.hex.data, true);
     //save 
     this.save();
   }
@@ -223,41 +350,59 @@ export class Game {
     Save and Load 
   */
   save() {
-    let { seed, week, _plane, _hex, points, time, wounds, _routes, known } = this;
+    let { seed, _plane, _hex, _pt, _bg, fame, stats, stamina, _items, _routes, known } = this;
     let data = {
-      seed, week, _plane, _hex, points, time, wounds, _routes
+      seed, _plane, _hex, _pt, _routes, _bg, fame, stats, stamina, _items
     }
     //save game data 
     localStorage.setItem("game", JSON.stringify(data));
     //save knowns 
     localStorage.setItem(this._plane, JSON.stringify(known));
   }
-  static load(week, data) {
+  static load(data) {
+    let _day = window.App.day;
+    //load game data
+    data._pt = data._pt[0] == _day ? data._pt : [_day, 0, 0, data._pt[3], data._pt[4]];
+    //return new game
     return Object.assign(new Game(), data);
   }
   get UI() {
     let { html, App } = window;
-    let { points, time, stats } = this;
+    let { points, time, fame, gameStats, stats, stamina, _items } = this;
+    let { coin, supply, trinkets, relics } = _items;
 
     //final layout 
     return html`
     <div class="ba pa1">
     <div class="f4 bg-white-40 ba pa2" style="width:300px">
       <h4 class="ma0 flex justify-between items-center">
-        <span>Week</span>
+        <span>Day</span>
         <span>${App.time.slice(0, -1).join(":")}</span>
         <div class="pointer dim ba pv1 ph2" onclick=${() => App.setSelect("about", "Main")}>?</div>
       </h4>
       <div class="mt1 flex justify-between">
-        <div>${points.toFixed(1)} points</div>
+        <div>${fame} fame</div>
+        <div>${points.toFixed(0)} points</div>
         <div>${(time / 24).toFixed(1)} days</div>
       </div>
-      <div class="mt1 flex justify-between">
-        <div>${stats.planes} plane${stats.planes.length == 1 ? '' : 's'}</div>
-        <div>${stats.hex} hex</div>
-        <div>${stats.creature} creatures</div>
+      <div class="mv1 flex justify-between">
+        <div>${gameStats.planes} plane${gameStats.planes.length == 1 ? '' : 's'}</div>
+        <div>${gameStats.hex} hex</div>
+        <div>${gameStats.creature} creatures</div>
+      </div>
+      <div class="pt2 flex justify-between bt">
+        ${["H", "K", "R"].map((s, i) => html`<div>${s}${stats[i]}</div>`)}
+        <div>St ${stamina.join("/")}</div>
+      </div>
+      <div class="mv1 flex items-center justify-between">
+        <div>₡ ${coin}</div>
+        <div class="flex items-center"><img src="src/assets/meat.svg" width="20" height="20"></img>${supply.join("/")}</div>
+        <div class="flex items-center"><img src="src/assets/porcelain-vase.svg" width="20" height="20"></img>${trinkets.join("/")}</div>
+        <div class="flex items-center"><img src="src/assets/locked-chest.svg" width="20" height="20"></img>${relics.join("/")}</div>
       </div>
     </div>
     </div>`
   }
 }
+
+//let dice = `<img src="src/assets/d10-outline.svg" width="40" height="40" />`

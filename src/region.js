@@ -10,7 +10,7 @@ let prng = new Chance();
 const Realms = {
     OL: {
         name: "Outlands",
-        water: "land,lake,bay,coast,fjord/2,1,1,1,1",
+        water: "land,lake,bay,coast,fjord,peninsula/2,1,1,1,1,1",
     }
 }
 
@@ -129,7 +129,6 @@ export class Region {
         })];
 
         //local creatures
-        this.nc = 0
         this._creatures = _.fromN(8, j => {
             let opts = {
                 seed: [this.seed, "c", j].join("."),
@@ -138,8 +137,13 @@ export class Region {
             return FeatureGen.creature(this, opts)
         })
 
+        //numbers for tracking 
+        this._n = {
+            c: 0,
+            h: 0
+        }
+        //track features
         this._factions = []
-        this._hazards = []
         this._sites = []
         //now calculate features
         for (let j = 0; j < _nF; j++) {
@@ -158,10 +162,10 @@ export class Region {
                     this._people.push(F);
                     break;
                 case "creature":
-                    'Humanoid,Local'.includes(F.base) ? this._people.push(F) : this.nc++;
+                    'Humanoid,Local'.includes(F.base) ? this._people.push(F) : this._n.c++;
                     break;
                 case "hazard":
-                    this._hazards.push(F)
+                    this._n.h++;
                     break;
                 case "site":
                     this._sites.push(F)
@@ -184,7 +188,7 @@ export class Region {
             return {
                 what: "route",
                 _terrain: 'plains,forest,mountain,swamp',
-                seed: PRNG.pickone(["=", ">"]) + "OL" + PRNG.AlphaSeed(14)
+                seed: "OL" + PRNG.AlphaSeed(14)
             }
         }
         );
@@ -200,7 +204,6 @@ export class Region {
 
     get factions() {
         let all = []
-        this._hazards.forEach(o => o._faction ? all.push(o._faction) : null);
         this._sites.forEach(o => o._faction ? all.push(o._faction) : null);
 
         return this._factions.concat(all);
@@ -260,24 +263,24 @@ export class Region {
     */
 
     get routes() {
-        return !App.game ? [] : App.game._routes.filter(r => r.slice(0, 16) == this.seed || r.slice(16) == ("=" + this.seed)).map(r => {
-            let [pa, pb, twoWay] = [r.slice(0, 16), r.slice(17), r.slice(16, 17) == "="];
+        return !App.game ? [] : App.game._routes.filter(r => r.includes(this.seed)).map(r => {
+            let [pa, pb] = [r.slice(0, 16), r.slice(17)];
             let destination = pa == this.seed ? pb : pa;
             let _name = localStorage.getItem(destination) ? JSON.parse(localStorage.getItem(destination))[0] : "";
-            return [destination, _name, twoWay];
+            return [destination, _name];
         })
     }
 
     /*
         Generate encounter 
     */
-    encounter(h) {
-        Encounter(this, h);
+    encounter(h, isSearch) {
+        Encounter(this, h, isSearch);
     }
 
     linkToPS(raw, islands) {
-        //forests/mountains - for sue later 
-        let _fm = []
+        let PRNG = new Chance([this.seed, "PSLink"].join("."))
+        let nh = this._n.h;
         //run through isle faces and init sites and areas
         let features = {}
         raw.dcel.faces.forEach(f => {
@@ -287,7 +290,7 @@ export class Region {
             f._id = data._id = _id;
 
             let name = data.aboveSea < 0 ? 'Water' : 'Open Country';
-            let _terrain = ''
+            let _terrain = name == 'Water' ? 'water' : 'plains'
             //initiate site or terrain
             if (null != data.site) {
                 _terrain = data.site.cityscape ? "settlement" : "dungeon";
@@ -302,25 +305,41 @@ export class Region {
                 name = data.terrain.area.name;
                 //terrain
                 _terrain = TerrainCheck(name);
+                //hazard 
+                let hazard = FeatureGen.hazard({ rough: true });
+                if (nh > 0 && !features[name]) {
+                    hazard = FeatureGen.hazard({
+                        seed: [this.seed, "hazard", nh].join("."),
+                        terrain: _terrain
+                    })
+                    nh--;
+                }
                 //define feature object 
                 let f = features[name] || {
+                    name,
                     align: data.terrain.area.align.toString(),
                     faces: [],
-                    _terrain
+                    _terrain,
+                    hazard,
+                    diff: PRNG.weighted([1, 2, 3], [2, 3, 1])
+                };
+                f.faces.push(data);
+                data._feature = features[name] = f;
+            }
+            else {
+                //define feature object 
+                let f = features[name] || {
+                    name,
+                    faces: [],
+                    _terrain,
+                    hazard: FeatureGen.hazard({ rough: true }),
+                    diff: PRNG.weighted([1, 2, 3], [2, 3, 1])
                 };
                 f.faces.push(data);
                 data._feature = features[name] = f;
             }
 
-            //determine terrain 
-            _terrain = _terrain == '' ? TerrainCheck(name) : _terrain;
-            Object.assign(data, {
-                name,
-                _terrain
-            });
-
-            //track forests 
-            "forest,mountain".includes(_terrain) ? _fm.push(f) : null;
+            Object.assign(data, { name, _terrain });
         }
         );
 
@@ -334,7 +353,6 @@ export class Region {
         //terrain features 
         let terrainFeatures = Object.entries(features).filter(([name, f]) => !f.seed);
         //work through sites and assign hexes 
-        let PRNG = new Chance([this.seed, "PSLink"].join("."))
         this._sites.concat(this._routes).forEach(s => {
             //terrain of the site 
             let terrain = s._terrain || PRNG.WS('plains,forest,mountain,swamp/1,1,1,1');
@@ -344,10 +362,9 @@ export class Region {
             });
             pickFrom = pickFrom.length == 0 ? terrainFeatures : pickFrom;
             //pick hex and assign
-            console.log(terrain, pickFrom)
             let _feature = PRNG.pickone(pickFrom);
             s.face = PRNG.pickone(_feature[1].faces);
-            s.face.site = s;
+            s.face._site = s;
         }
         )
 
@@ -380,11 +397,10 @@ export class Region {
 
         //get name and face data
         let { data } = faces[closest[0]];
-        let name = data.site && data.site.name ? data.site.name : data.terrain && data.terrain.area ? data.terrain.area.name : data.aboveSea < 0 ? 'Water' : 'Open Country';
         return {
-            name,
+            name: data.name,
             face: data,
-            feature: this.ps.features[name] || null
+            feature: data._feature
         }
     }
 
@@ -476,14 +492,21 @@ const SVGActions = (R) => {
 }
 
 /*
+    Actions available on the map by terrain type
+*/
+const SettlementActions = ["Explore/Explore", "Rest/Rest", "Resupply/Resupply", "Sell Trinkets/SellTrinkets", "Trade Relic for Fame/RelicForFame"];
+const WildActions = ["Camp/Camp", "Explore/Explore"]
+/*
     User Interface
 */
 
 const UI = R => {
     let { html, App } = window;
     let { game = {} } = App;
+    let { stamina = [0, 0], _items = {} } = game;
+    let { coin = 0, supply = [0, 0], trinkets = [0, 0], relics = [0, 0] } = _items;
     let { selected } = App.state;
-    let { seed, realm, _people, _size, creatures, nc, ps, routes = [], findRoute = null } = R;
+    let { seed, realm, _people, _size, creatures, ps, routes = [], findRoute = null } = R;
     let _face = App.face || {};
     let _id = _face._id || -1;
     let _known = game.known ? game.known.includes(_id) : false
@@ -499,11 +522,28 @@ const UI = R => {
         st = _id == game._hex && !game.known.includes(_id) && _terrain != "water" ? game.searchTime : -1;
     }
 
-    //check for move 
-    const moveTo = html`<div class="pointer dim bg-light-blue ba-white br2 pa2 tc b" onclick=${() => game.moveTo(_face)}>Move To (${tt.toFixed(1)} hrs)</div>`
-
-    //check for search 
-    const search = html`<div class="pointer dim bg-light-blue ba-white br2 pa2 tc b" onclick=${() => game.search()}>Search (${st} hrs)</div>`
+    //determine actions 
+    let _act = {
+        move: html`<div class="pointer dim bg-light-blue ba-white br2 pa2 tc b" onclick=${() => game.moveTo(_face)}>Move To (${tt.toFixed(1)} hrs)</div>`,
+        wild: html`${WildActions.map(id => {
+            let [text, act] = id.split("/")
+            //limit actions
+            if (_terrain == "water" || (act == "Explore" && (st == -1 || stamina[0] == 0)) || (act == 'Camp' && stamina[0] == stamina[1])) {
+                return ''
+            }
+            let hrs = act == "Camp" ? 8 : st.toFixed(0)
+            return html`<div class="w-50 pa1"><div class="pointer dim bg-light-blue ba-white br2 pa2 mh1 tc b" onclick=${() => game.act(act)}>${text} (${hrs} hrs)</div></div>`
+        })}`,
+        settlement: html`${SettlementActions.map(id => {
+            let [text, act] = id.split("/")
+            //limit actions
+            if ((act == "Explore" && st == -1) || (act == 'Resupply' && (supply[0] == supply[1] || coin < 5)) || (act == 'SellTrinkets' && trinkets[0] == 0) || (act == 'Rest' && stamina[0] == stamina[1]) || (act == 'RelicForFame' && relics[0] == 0)) {
+                return ''
+            }
+            let hrs = act == "Explore" ? st : 8
+            return html`<div class="w-50 pa1"><div class="pointer dim bg-light-blue ba-white br2 pa2 tc b" onclick=${() => game.act(act)}>${text} (${hrs} hrs)</div></div>`
+        })}`
+    }[tt != -1 ? "move" : _terrain == "settlement" ? "settlement" : "wild"];
 
     //route frame 
     const routeFrame = html`<iframe id="route" width="1" height="1" src=${findRoute != null ? findRoute.ps.href : ""}></iframe>`
@@ -513,14 +553,10 @@ const UI = R => {
     <div>
         <h4 class="ma0 mt1">Routes</h4>
         ${routes.map(r => html`
-        <div class="pointer dim bg-light-blue ba-white br2 ma1 pa2 tc b" onclick=${() => App.travelRequest(r)}>
-            <span class="f4">${r[2] ? '⇄ ' : ''}</span>${r[1]}
+        <div class="f5 pointer dim bg-light-blue ba-white br2 ma1 pa1 tc b" onclick=${() => App.travelRequest(r)}>
+            ${r[1]}
         </div>`)}
     </div>`
-
-    //get selected route 
-    let _sr = selected.get('selRoute') || [null, ''];
-    let routeBtn = html`<div class="pointer dim bg-light-blue ba-white br2 pa2 tc b" onclick=${() => App.changePlane(_sr)}>Travel to ${_sr[1]}</div>`
 
     //what feature is selected
     let _sf = selected.get('selFeature') || "";
@@ -544,11 +580,9 @@ const UI = R => {
     <div class=${_sf == '' ? 'dn' : ''}>
         <h4 class="ma0">${_sf}${nff != 0 ? ` (${nff})` : ''}</h4>
         <div class="mh2">${_face.site && _known ? html`<b>Site:</b> ${_face.site.text}` : ''}</div>
-        ${st != -1 ? search : ''}
-        ${tt != -1 ? moveTo : ''}
+        <div class="w-100 flex flex-wrap justify-center">${_act}</div>
     </div>
     ${routes.length > 0 ? travelRoutes : ''}
-    <div class=${_sr[0] == null ? 'dn' : ''}>${routeBtn}</div>
   </div>
   </div>`
 }

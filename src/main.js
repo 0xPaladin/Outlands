@@ -1,21 +1,21 @@
 //https://pure-css.github.io/start/
 //https://picocss.com/docs
 
-import {Chance, _} from "./helper.js";
+import { Chance, _ } from "./helper.js";
 const Cap = _.capitalize;
-import {Region} from "./region.js";
+import { Region } from "./region.js";
 
 //The Game 
-import {Game} from "./game.js"
+import { Game } from "./game.js"
 
 //Preact with htm 
-import {html, Component, render} from "https://unpkg.com/htm/preact/standalone.module.js";
+import { html, Component, render } from "https://unpkg.com/htm/preact/standalone.module.js";
 
 //About 
 import * as About from "./about.js"
 
 //Sweet Alert Scenes
-import {EnterScene, Swal} from "./scenes.js"
+import { EnterScene, Swal } from "./scenes.js"
 
 
 let prng = new Chance()
@@ -27,8 +27,8 @@ class App extends Component {
         this.state = {
             mode: 'create',
             selected: new Map(),
-            pullRoutes : [],
-            changePlane : null,
+            pullRoutes: [],
+            changePlane: null,
             tick: 0
         };
 
@@ -36,26 +36,27 @@ class App extends Component {
         let _game = localStorage.getItem("game") || null;
         _game = _game == null ? {} : JSON.parse(_game);
         //has to be same week 
-        let seed = _game._plane && _game.week == this.week ? _game._plane : 'OL'+prng.AlphaSeed(14);
+        let seed = _game._plane ? _game._plane : 'OL' + prng.AlphaSeed(14);
 
         //use game data 
-        this.region = new Region({seed});
+        this.region = new Region({ seed });
         this.PSView = null;
 
         window.App = this;
         window.html = html;
+        window.Swal = Swal;
     }
 
     // Lifecycle: Called whenever our component is created
     async componentDidMount() {
-        localStorage.getItem("game") ? null : this.setSelect('about','Main');
+        localStorage.getItem("game") ? null : this.setSelect('about', 'Main');
         //timer 
-        setInterval( () => {
+        setInterval(() => {
             this.state.tick++;
             this.region.ps.raw ? this.region.overlay() : null;
             this.refresh();
         }
-        , 1000)
+            , 1000)
     }
 
     refresh() {
@@ -68,40 +69,40 @@ class App extends Component {
         this.refresh();
     }
 
-    alert (data) {
-        Swal.fire(data);
+    alert(data) {
+        return Swal.fire(data);
     }
 
-    enterScene (data, noEscape) {
-        EnterScene(data,noEscape);
+    enterScene(data, noEscape) {
+        EnterScene(data, noEscape);
     }
 
-    get time () {
+    get time() {
         let _now = Date.now();
-        let _d = Date.now() - (new Date(2025,0,1));
-        let _week = 1000*60*60*24*7;
-        let nDay = 7 * ((_d/_week)%1);
-        let nHr = 24 * (nDay%1);
-        let nMin = 60 * (nHr%1);
-        
-        return [Math.floor(_d/_week),Math.floor(nDay),Math.floor(nHr),Math.floor(nMin),Math.floor(60*(nMin%1))]
+        let _d = Date.now() - (new Date(2025, 0, 1));
+        let _day = 1000 * 60 * 60 * 24;
+        let nDay = _d / _day;
+        let nHr = 24 * (nDay % 1);
+        let nMin = 60 * (nHr % 1);
+
+        return [Math.floor(nDay), Math.floor(nHr), Math.floor(nMin), Math.floor(60 * (nMin % 1))]
     }
 
-    get week () {
+    get day() {
         return this.time[0]
-      }
+    }
 
     //clear all saved data 
-    reset () {
+    reset() {
         Swal.fire({
             title: `Reset all game data?`,
-            text : 'You will erase all of your points/time, and start over on a new plane. Ok?',
-            showCancelButton : true,
+            text: 'You will erase all of your points/time, and start over on a new plane. Ok?',
+            showCancelButton: true,
             confirmButtonColor: "red",
             confirmButtonText: "Reset",
-        }).then( res => {
+        }).then(res => {
             //clear data, reload page
-            if(res.isConfirmed) {
+            if (res.isConfirmed) {
                 localStorage.clear();
                 location.reload(true);
             }
@@ -109,44 +110,44 @@ class App extends Component {
     }
 
     //post confirmation 
-    travelRequest ([seed,name]) {
+    travelRequest([seed, name]) {
         Swal.fire({
             title: `Travel to ${name}?`,
-            text : 'All travel between planes takes 1-6 days.',
-            showCancelButton : true,
+            text: 'All travel between planes takes 1-6 days.',
+            showCancelButton: true,
             confirmButtonColor: "#3085d6",
             confirmButtonText: "Go!",
-        }).then( res => {
+        }).then(res => {
             //handle move 
-            if(res.isConfirmed) {
-                this.state.selected.set('selFeature',null)
+            if (res.isConfirmed) {
+                this.state.selected.set('selFeature', null)
                 this.state.changePlane = name;
-                this.region = new Region({seed}) 
+                this.region = new Region({ seed })
             }
         })
     }
 
     update() {
-        let {changePlane, pullRoutes} = this.state;
+        let { changePlane, pullRoutes } = this.state;
 
         //Initialise
-        if(pullRoutes.length > 0 && this.region.findRoute == null){
-            this.region.findRoute = new Region({seed:pullRoutes[0]});
+        if (pullRoutes.length > 0 && this.region.findRoute == null) {
+            this.region.findRoute = new Region({ seed: pullRoutes[0] });
         }
         //pull route data 
-        if(document.getElementById('route') && pullRoutes.length > 0) {
+        if (document.getElementById('route') && pullRoutes.length > 0) {
             let seed = pullRoutes[0];
             //check for iframe
             let rframe = document.getElementById('route');
-            let {PSMap={}} = rframe.contentWindow;
-            if(PSMap.name && this.region.findRoute.ps.seed == PSMap.bp.seed){
+            let { PSMap = {} } = rframe.contentWindow;
+            if (PSMap.name && this.region.findRoute.ps.seed == PSMap.bp.seed) {
                 //set name 
-                localStorage.setItem(seed,JSON.stringify([PSMap.name]))
+                localStorage.setItem(seed, JSON.stringify([PSMap.name]))
                 //remove find route 
                 this.region.findRoute = null;
                 //remove pullroute
                 this.state.pullRoutes.shift();
-            } 
+            }
         }
         //skip if no map or already loaded
         if (!document.getElementById('psmap') || this.region == null || this.region.ps.raw) {
@@ -155,14 +156,14 @@ class App extends Component {
 
         //pull data from iframe 
         const iframe = document.getElementById('psmap');
-        let {PSMap={}} = this.iWindow = iframe.contentWindow;
+        let { PSMap = {} } = this.iWindow = iframe.contentWindow;
 
         //do not process if awaiting new plane
-        if(PSMap.name && changePlane && PSMap.name != changePlane) {
+        if (PSMap.name && changePlane && PSMap.name != changePlane) {
             return;
         }
 
-        let islands = PSMap.islands ? PSMap.islands.map(isle=> isle.faces.map(({data,__id__})=>{
+        let islands = PSMap.islands ? PSMap.islands.map(isle => isle.faces.map(({ data, __id__ }) => {
             null != data.site ? data.site.init() : null != data.terrain ? data.terrain.init() : null;
             return __id__;
         })) : []
@@ -171,19 +172,19 @@ class App extends Component {
         }
 
         //link gen to PS 
-        this.region.linkToPS(PSMap,islands);
+        this.region.linkToPS(PSMap, islands);
 
         //new game ?
-        if(!this.game){
+        if (!this.game) {
             let _game = localStorage.getItem("game") ? JSON.parse(localStorage.getItem("game")) : null;
-            this.game = _game != null && _game.week == this.week ? Game.load(this.week,_game) : new Game(this.week,this.region);
+            this.game = _game != null ? Game.load(_game) : new Game();
         }
 
         //Initialise in storage 
-        localStorage.getItem(this.region.seed) ? null : localStorage.setItem(this.region.seed,JSON.stringify([PSMap.name]));
+        localStorage.getItem(this.region.seed) ? null : localStorage.setItem(this.region.seed, JSON.stringify([PSMap.name]));
 
         //move planes?
-        if(changePlane != null){
+        if (changePlane != null) {
             this.game.changePlane(this.region);
             this.state.changePlane = null;
         }
@@ -201,12 +202,12 @@ class App extends Component {
         console.log(this.game)
     }
 
-    render(props, {selected}) {
+    render(props, { selected }) {
         let _about = selected.get("about") || null
-        
-        let {ps} = this.region;
+
+        let { ps } = this.region;
         //get data from iframe once loaded 
-        let {name, viewHeight} = ps.raw || {}
+        let { name, viewHeight } = ps.raw || {}
         //window sizing 
         const width = window.innerWidth;
         const height = window.innerHeight;
