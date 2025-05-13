@@ -285,6 +285,7 @@ export class Region {
         let features = {}
         raw.dcel.faces.forEach(f => {
             let { data } = f;
+            let diff = PRNG.weighted([1, 2, 3], [2, 3, 1]);
             //make id from center point 
             let _id = [Math.round(data.center.x), Math.round(data.center.y)].join(".");
             f._id = data._id = _id;
@@ -296,6 +297,7 @@ export class Region {
                 _terrain = data.site.cityscape ? "settlement" : "dungeon";
                 name = data.site.name;
                 data._feature = features[data.site.name] = Object.assign(data.site, { _terrain });
+                data._feature.dif = _terrain == "settlement" ? 2 : diff;
                 _terrain == "dungeon" ? data._feature._dungeon = FeatureGen.dungeon(this, {
                     seed: [this.seed, "dungeon", _id].join(".")
                 }) : null;
@@ -321,7 +323,7 @@ export class Region {
                     faces: [],
                     _terrain,
                     hazard,
-                    diff: PRNG.weighted([1, 2, 3], [2, 3, 1])
+                    diff
                 };
                 f.faces.push(data);
                 data._feature = features[name] = f;
@@ -333,7 +335,7 @@ export class Region {
                     faces: [],
                     _terrain,
                     hazard: FeatureGen.hazard({ rough: true }),
-                    diff: PRNG.weighted([1, 2, 3], [2, 3, 1])
+                    diff
                 };
                 f.faces.push(data);
                 data._feature = features[name] = f;

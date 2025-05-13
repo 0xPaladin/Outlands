@@ -107,7 +107,7 @@ export const Encounter = (R, h, isSearch) => {
     let { _safetyMod, _people, factions, _creatures, nc } = R;
     let { _terrain, _site = null, _feature } = h;
     //difficulty of skill check
-    let diff = _feature ? _feature.diff : h.diff;
+    let diff = _feature ? _feature.diff : h.diff || 1;
 
     //determine what they faces 
     let _roll = prng.d12() + _safetyMod;
